@@ -25,6 +25,7 @@ def train_mesh_model(
     mesh_subdivide=3,
     kappa=100,
     save_dir="./models",
+    healpix=False
 ):
     if seed is not None:
         torch.manual_seed(seed)
@@ -44,7 +45,9 @@ def train_mesh_model(
         "loss": loss_name,
         "seed": seed,
         "mesh_subdivide": mesh_subdivide,
-        "kappa": kappa
+        "kappa": kappa,
+        "model": model,
+        "healpix": healpix,
     }
 
     # Set up Weights and Biases
@@ -52,9 +55,9 @@ def train_mesh_model(
     run = wandb.init(project="deepfixel", name=run_name, config=config)
 
     # Set up datasets
-    train_dataset = RandomMeshDataset(n_fibers=n_fibers, l_max=6, seed=seed, subdivide=mesh_subdivide, kappa=kappa)
+    train_dataset = RandomMeshDataset(n_fibers=n_fibers, l_max=6, seed=seed, subdivide=mesh_subdivide, kappa=kappa, healpix=healpix)
     val_dataset = RandomMeshDataset(
-        n_fibers=n_fibers, l_max=6, seed=seed + 1, size=1000, deterministic=True, subdivide=mesh_subdivide, kappa=kappa
+        n_fibers=n_fibers, l_max=6, seed=seed + 1, size=1000, deterministic=True, subdivide=mesh_subdivide, kappa=kappa, healpix=healpix
     )
 
     # Set up dataloaders
@@ -193,9 +196,10 @@ def test_mesh_model(
     batch_size=512,
     test_dir="./test_data",
     gpu_id=0,
+    healpix=False,
 ):
     # Load data
-    test_dataset = GeneratedMeshDataset(n_fibers=n_fibers, directory=test_dir, return_fixels=True, subdivide=subdivide_mesh, kappa=kappa)
+    test_dataset = GeneratedMeshDataset(n_fibers=n_fibers, directory=test_dir, return_fixels=True, subdivide=subdivide_mesh, kappa=kappa, healpix=healpix)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     n_mesh = test_dataset.n_mesh

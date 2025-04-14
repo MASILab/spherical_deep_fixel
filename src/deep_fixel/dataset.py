@@ -16,6 +16,7 @@ import nibabel as nib
 from pathlib import Path
 import re
 from .utils import load_fissile_mat
+from hsd.utils.sampling import HealpixSampling
 
 class RandomODFDataset(IterableDataset):
     def __init__(self, n_fibers, l_max=6, seed=None, size=None, deterministic=False):
@@ -186,7 +187,7 @@ class RandomMeshDataset(IterableDataset):
         size=None,
         deterministic=False,
         return_fixels=False,
-        face=False,
+        healpix=False
     ):
         """Generate ODFs at random angles and volume fractions (using Tournier07/mrtrix convention)
 
@@ -199,7 +200,8 @@ class RandomMeshDataset(IterableDataset):
         l_max : int, optional
             Maximum spherical harmonic order, by default 6
         subdivide : int, optional
-            Number of times to subdivide the ico-hemisphere, by default 3
+            Number of times to subdivide the ico-hemisphere if healpix=False, 
+            otherwise corresponds to depth of Healpix sampling (where smaller is more vertices), by default 3
         kappa : float, optional
             Concentration parameter for von Mises-Fisher distribution, by default 100
         size : int, optional
@@ -208,8 +210,8 @@ class RandomMeshDataset(IterableDataset):
             If True, generate same for each index, by default False. Only used if size is not None.
         return_fixels : bool, optional
             If True, return fixels along with PDF meshes, by default False
-        face : bool, optional
-            Sample on face of icosphere instead of at vertices, by default False
+        healpix : bool, optional
+            If True, sample on healpix instead of icosphere, by default False
         """
         self.n_fibers = n_fibers
         self.seed = seed
@@ -220,24 +222,30 @@ class RandomMeshDataset(IterableDataset):
         self.l_max = l_max
         self.deteministic = deterministic
 
-        self.icosphere = hemi_icosahedron.subdivide(n=subdivide)
+        if healpix:
+            n_side = 8
+            depth = subdivide
+            patch_size = 1
+            sh_degree = 6
+            pooling_mode = 'average'
+            pooling_name = 'mixed'
+            use_hemisphere = True
+            sampling = HealpixSampling(
+                n_side, depth, patch_size, sh_degree, pooling_mode, pooling_name, use_hemisphere
+            )
+            vecs = sampling.vec[0]
+            self.icosphere = Sphere(xyz=vecs)
+            self.n_mesh = len(vecs)
+            self.sphere = self.icosphere
+        else:
+            self.icosphere = hemi_icosahedron.subdivide(n=subdivide)
+            self.n_mesh = (
+                len(self.icosphere.vertices)
+            )
+            self.sphere = self.icosphere
         self.kappa = kappa
 
         self.return_fixels = return_fixels
-        self.face = face
-
-        if self.face:
-            mesh = Trimesh(vertices=self.icosphere.vertices, faces=self.icosphere.faces)
-            self.face_centers = mesh.triangles_center
-            self.face_centers = (
-                self.face_centers / np.linalg.norm(self.face_centers, axis=1)[:, None]
-            )
-            self.face_sphere = Sphere(xyz=self.face_centers)
-
-        self.n_mesh = (
-            len(self.icosphere.vertices) if not self.face else len(self.face_centers)
-        )
-        self.sphere = self.icosphere if not self.face else self.face_sphere
 
     def generate_odf(self, seed=None):
         """Return odfs, a n_fibers x n_mesh array of random single-fiber odfs and total_odf, the 1 x n_coeff sum of all odfs."""
@@ -272,31 +280,17 @@ class RandomMeshDataset(IterableDataset):
         total_odf = np.sum(odfs, axis=0)
 
         # Sample total_odf along mesh
-        if self.face:
-            total_odf_mesh = sh_to_sf(
-                total_odf,
-                self.face_sphere,
-                sh_order_max=self.l_max,
-                basis_type="tournier07",
-            )
-        else:
-            total_odf_mesh = sh_to_sf(
-                total_odf,
-                self.icosphere,
-                sh_order_max=self.l_max,
-                basis_type="tournier07",
-            )
+        total_odf_mesh = sh_to_sf(
+            total_odf,
+            self.icosphere,
+            sh_order_max=self.l_max,
+            basis_type="tournier07",
+        )
 
-        if self.face:
-            pdf = [
-                v * vonmises_fisher(mu, self.kappa).pdf(self.face_sphere.vertices)
-                for v, mu in zip(vol, xyz.T)
-            ]
-        else:
-            pdf = [
-                v * vonmises_fisher(mu, self.kappa).pdf(self.icosphere.vertices)
-                for v, mu in zip(vol, xyz.T)
-            ]
+        pdf = [
+            v * vonmises_fisher(mu, self.kappa).pdf(self.icosphere.vertices)
+            for v, mu in zip(vol, xyz.T)
+        ]
         pdf_mesh = np.sum(pdf, axis=0)
 
         # Now return
@@ -343,7 +337,7 @@ class GeneratedMeshDataset(Dataset):
         glob_name=None,
         return_fixels=False,
         return_fissile=False,
-        face=False,
+        healpix=False,
     ):
         """Load ODFs from a directory of .mat files from FISSILE outputs.
 
@@ -354,7 +348,8 @@ class GeneratedMeshDataset(Dataset):
         directory : str
             Directory containing .mat files
         subdivide : int, optional
-            Number of times to subdivide the ico-hemisphere, by default 3
+            Number of times to subdivide the ico-hemisphere if healpix=False,
+            otherwise corresponds to depth of Healpix sampling (where smaller is more vertices), by default 3
         kappa : float, optional
             Concentration parameter for von Mises-Fisher distribution, by default 100
         glob_name : str, optional
@@ -363,30 +358,41 @@ class GeneratedMeshDataset(Dataset):
             If True, return fixels along with PDF meshes, by default False
         return_fissile : bool, optional
             If True, return the FISSILE outputs, by default False
+        healpix : bool, optional
+            If True, sample on healpix instead of icosphere, by default False
         """
         self.n_fibers = n_fibers
         self.directory = directory
-
-        self.icosphere = hemi_icosahedron.subdivide(n=subdivide)
-        self.kappa = kappa
         self.l_max = 6
+
+
+        if healpix:
+            n_side = 8
+            depth = subdivide
+            patch_size = 1
+            sh_degree = self.l_max
+            pooling_mode = 'average'
+            pooling_name = 'mixed'
+            use_hemisphere = True
+            sampling = HealpixSampling(
+                n_side, depth, patch_size, sh_degree, pooling_mode, pooling_name, use_hemisphere
+            )
+            vecs = sampling.vec[0]
+            self.icosphere = Sphere(xyz=vecs)
+            self.n_mesh = len(vecs)
+            self.sphere = self.icosphere
+        else:
+            self.icosphere = hemi_icosahedron.subdivide(n=subdivide)
+            self.n_mesh = (
+                len(self.icosphere.vertices)
+            )
+            self.sphere = self.icosphere
+
+
+        self.kappa = kappa
 
         self.return_fixels = return_fixels
         self.return_fissile = return_fissile
-
-        self.face = face
-        if self.face:
-            mesh = Trimesh(vertices=self.icosphere.vertices, faces=self.icosphere.faces)
-            self.face_centers = mesh.triangles_center  # (n,3)
-            self.face_centers = (
-                self.face_centers / np.linalg.norm(self.face_centers, axis=1)[:, None]
-            )
-            self.face_sphere = Sphere(xyz=self.face_centers)
-
-        self.n_mesh = (
-            len(self.icosphere.vertices) if not self.face else len(self.face_centers)
-        )
-        self.sphere = self.icosphere if not self.face else self.face_sphere
 
         # Search directory for *<n_fibers>fibers*.mat files
         if glob_name is not None:
@@ -457,33 +463,17 @@ class GeneratedMeshDataset(Dataset):
                 x, y, z = xyz
                 r, theta, phi = cart2sphere(x, y, z)
 
-                # Sample total_odf along mesh
-                if self.face:
-                    total_odf_mesh = sh_to_sf(
-                        total_odf,
-                        self.face_sphere,
-                        sh_order_max=self.l_max,
-                        basis_type="tournier07",
-                    )
-                else:
-                    total_odf_mesh = sh_to_sf(
-                        total_odf,
-                        self.icosphere,
-                        sh_order_max=self.l_max,
-                        basis_type="tournier07",
-                    )
+                total_odf_mesh = sh_to_sf(
+                    total_odf,
+                    self.icosphere,
+                    sh_order_max=self.l_max,
+                    basis_type="tournier07",
+                )
 
-                if self.face:
-                    pdf = [
-                        v
-                        * vonmises_fisher(mu, self.kappa).pdf(self.face_sphere.vertices)
-                        for v, mu in zip(vol, xyz.T)
-                    ]
-                else:
-                    pdf = [
-                        v * vonmises_fisher(mu, self.kappa).pdf(self.icosphere.vertices)
-                        for v, mu in zip(vol, xyz.T)
-                    ]
+                pdf = [
+                    v * vonmises_fisher(mu, self.kappa).pdf(self.icosphere.vertices)
+                    for v, mu in zip(vol, xyz.T)
+                ]
                 pdf_mesh = np.sum(pdf, axis=0)
 
                 # Now return
@@ -522,6 +512,7 @@ class GeneratedMeshNIFTIDataset(Dataset):
         nifti_path,
         subdivide=3,
         kappa=100,
+        healpix=False,
     ):
         """Load ODFs from a directory of .mat files from FISSILE outputs.
 
@@ -532,19 +523,38 @@ class GeneratedMeshNIFTIDataset(Dataset):
         nifti_path : str
             Path to nifti file
         subdivide : int, optional
-            Number of times to subdivide the ico-hemisphere, by default 3
+            Number of times to subdivide the ico-hemisphere if healpix=False,
+            otherwise corresponds to depth of Healpix sampling (where smaller is more vertices), by default 3
         kappa : float, optional
             Concentration parameter for von Mises-Fisher distribution, by default 100
+        healpix : bool, optional
+            If True, sample on healpix instead of icosphere, by default False
         """
         self.n_fibers = n_fibers
         self.nifti_path = nifti_path
-
-        self.icosphere = hemi_icosahedron.subdivide(n=subdivide)
-        self.kappa = kappa
         self.l_max = 6
 
-        self.n_mesh = len(self.icosphere.vertices)
-        self.sphere = self.icosphere
+        if healpix:
+            n_side = 8
+            depth = subdivide
+            patch_size = 1
+            sh_degree = 6
+            pooling_mode = 'average'
+            pooling_name = 'mixed'
+            use_hemisphere = True
+            sampling = HealpixSampling(
+                n_side, depth, patch_size, sh_degree, pooling_mode, pooling_name, use_hemisphere
+            )
+            vecs = sampling.vec[0]
+            self.icosphere = Sphere(xyz=vecs)
+            self.n_mesh = len(vecs)
+            self.sphere = self.icosphere
+        else:
+            self.icosphere = hemi_icosahedron.subdivide(n=subdivide)
+            self.n_mesh = len(self.icosphere.vertices)
+            self.sphere = self.icosphere
+
+        self.kappa = kappa
 
         # Load NIFTI
         nifti = nib.load(nifti_path)

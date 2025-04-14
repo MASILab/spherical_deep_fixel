@@ -7,16 +7,17 @@ n_steps = 10000
 validation_patience = 5
 loss = "MSE"
 model = "mesh_mlp"
-gpu_id = 1
+gpu_id = 0
 seed = 42
-mesh_subdivide = 3
+mesh_subdivide = 1
 kappa = 100
 n_fibers = 'both'
+healpix = True
 save_dir = "./models"
 test_dir = "./test_data"
 
 datetime_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-name = f"deepfixel_{model}_{datetime_str}"
+name = f"deepfixel_{model}_healpix_{datetime_str}"
 
 deep_fixel.train_mesh_model(
     run_name=name,
@@ -32,6 +33,7 @@ deep_fixel.train_mesh_model(
     kappa=kappa,
     n_fibers=n_fibers,
     save_dir=save_dir,
+    healpix=healpix,
 )
 
 output_dir = f'./outputs/{name}'
@@ -48,4 +50,5 @@ deep_fixel.test_mesh_model(
     kappa=kappa,
     test_dir=test_dir,
     gpu_id=gpu_id,
+    healpix=healpix,
 )
