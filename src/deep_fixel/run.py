@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 import wandb
 from .dataset import RandomMeshDataset, GeneratedMeshDataset
-from .models import CrossingFiberMeshMLP
+from .models import CrossingFiberMeshMLP, CrossingFiberMeshSCNN
 from .utils import plot_odf, plot_mesh, pdf2odfs, match_odfs, angular_corr_coeff
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -72,6 +72,9 @@ def train_mesh_model(
     # Set up model
     if model == "mesh_mlp":
         model = CrossingFiberMeshMLP(n_mesh=n_mesh, device=device, sphere=sphere)
+    elif model == 'mesh_scnn':
+        model = CrossingFiberMeshSCNN(device=device, n_side=8, depth=5, patch_size=1, sh_degree=6, pooling_mode='average', pooling_name='spherical', use_hemisphere=True,
+            in_channels=1, out_channels=1, filter_start=2, block_depth=1, in_depth=1, kernel_sizeSph=3, kernel_sizeSpa=3, isoSpa=True, keepSphericalDim = True)
     else:
         raise ValueError(f"Model {model} not recognized")
 
