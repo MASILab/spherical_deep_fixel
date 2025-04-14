@@ -1,4 +1,4 @@
-import fissile
+import deep_fixel
 from datetime import datetime
 
 lr = 1e-3
@@ -18,7 +18,7 @@ test_dir = "./test_data"
 datetime_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 name = f"deepfixel_{model}_{datetime_str}"
 
-fissile.train_mesh_model(
+deep_fixel.train_mesh_model(
     run_name=name,
     lr=lr,
     batch_size=batch_size,
@@ -38,7 +38,7 @@ output_dir = f'./outputs/{name}'
 amp_threshold = 0.1
 model_path = f"./models/{name}/best_model.pth"
 
-fissile.test_mesh_model(
+deep_fixel.test_mesh_model(
     model_path=model_path,
     batch_size=batch_size,
     n_fibers=n_fibers,

@@ -1,4 +1,4 @@
-import fissile
+import deep_fixel
 from datetime import datetime
 
 lr = 1e-3
@@ -17,7 +17,7 @@ test_dir = "./test_data"
 output_dir = './outputs/pretrained'
 amp_threshold = 0.1
 
-fissile.test_mesh_model(
+deep_fixel.test_mesh_model(
     model_path=model_path,
     batch_size=batch_size,
     n_fibers=n_fibers,
