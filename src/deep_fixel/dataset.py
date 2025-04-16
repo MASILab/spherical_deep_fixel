@@ -16,6 +16,7 @@ import nibabel as nib
 from pathlib import Path
 import re
 from .utils import load_fissile_mat
+from tqdm import tqdm
 
 class RandomODFDataset(IterableDataset):
     def __init__(self, n_fibers, l_max=6, seed=None, size=None, deterministic=False):
@@ -173,8 +174,7 @@ class RandomFixelDataset(IterableDataset):
         else:
             while True:
                 yield self.generate_odf()
-
-
+                
 class RandomMeshDataset(IterableDataset):
     def __init__(
         self,
@@ -185,8 +185,7 @@ class RandomMeshDataset(IterableDataset):
         seed=None,
         size=None,
         deterministic=False,
-        return_fixels=False,
-        face=False,
+        return_fixels=False
     ):
         """Generate ODFs at random angles and volume fractions (using Tournier07/mrtrix convention)
 
@@ -208,8 +207,6 @@ class RandomMeshDataset(IterableDataset):
             If True, generate same for each index, by default False. Only used if size is not None.
         return_fixels : bool, optional
             If True, return fixels along with PDF meshes, by default False
-        face : bool, optional
-            Sample on face of icosphere instead of at vertices, by default False
         """
         self.n_fibers = n_fibers
         self.seed = seed
@@ -221,23 +218,13 @@ class RandomMeshDataset(IterableDataset):
         self.deteministic = deterministic
 
         self.icosphere = hemi_icosahedron.subdivide(n=subdivide)
+        self.n_mesh = (
+            len(self.icosphere.vertices)
+        )
+        self.sphere = self.icosphere
         self.kappa = kappa
 
         self.return_fixels = return_fixels
-        self.face = face
-
-        if self.face:
-            mesh = Trimesh(vertices=self.icosphere.vertices, faces=self.icosphere.faces)
-            self.face_centers = mesh.triangles_center
-            self.face_centers = (
-                self.face_centers / np.linalg.norm(self.face_centers, axis=1)[:, None]
-            )
-            self.face_sphere = Sphere(xyz=self.face_centers)
-
-        self.n_mesh = (
-            len(self.icosphere.vertices) if not self.face else len(self.face_centers)
-        )
-        self.sphere = self.icosphere if not self.face else self.face_sphere
 
     def generate_odf(self, seed=None):
         """Return odfs, a n_fibers x n_mesh array of random single-fiber odfs and total_odf, the 1 x n_coeff sum of all odfs."""
@@ -272,31 +259,17 @@ class RandomMeshDataset(IterableDataset):
         total_odf = np.sum(odfs, axis=0)
 
         # Sample total_odf along mesh
-        if self.face:
-            total_odf_mesh = sh_to_sf(
-                total_odf,
-                self.face_sphere,
-                sh_order_max=self.l_max,
-                basis_type="tournier07",
-            )
-        else:
-            total_odf_mesh = sh_to_sf(
-                total_odf,
-                self.icosphere,
-                sh_order_max=self.l_max,
-                basis_type="tournier07",
-            )
+        total_odf_mesh = sh_to_sf(
+            total_odf,
+            self.icosphere,
+            sh_order_max=self.l_max,
+            basis_type="tournier07",
+        )
 
-        if self.face:
-            pdf = [
-                v * vonmises_fisher(mu, self.kappa).pdf(self.face_sphere.vertices)
-                for v, mu in zip(vol, xyz.T)
-            ]
-        else:
-            pdf = [
-                v * vonmises_fisher(mu, self.kappa).pdf(self.icosphere.vertices)
-                for v, mu in zip(vol, xyz.T)
-            ]
+        pdf = [
+            v * vonmises_fisher(mu, self.kappa).pdf(self.icosphere.vertices)
+            for v, mu in zip(vol, xyz.T)
+        ]
         pdf_mesh = np.sum(pdf, axis=0)
 
         # Now return
@@ -342,8 +315,7 @@ class GeneratedMeshDataset(Dataset):
         kappa=100,
         glob_name=None,
         return_fixels=False,
-        return_fissile=False,
-        face=False,
+        return_fissile=False
     ):
         """Load ODFs from a directory of .mat files from FISSILE outputs.
 
@@ -366,27 +338,19 @@ class GeneratedMeshDataset(Dataset):
         """
         self.n_fibers = n_fibers
         self.directory = directory
+        self.l_max = 6
 
         self.icosphere = hemi_icosahedron.subdivide(n=subdivide)
+        self.n_mesh = (
+            len(self.icosphere.vertices)
+        )
+        self.sphere = self.icosphere
+
+
         self.kappa = kappa
-        self.l_max = 6
 
         self.return_fixels = return_fixels
         self.return_fissile = return_fissile
-
-        self.face = face
-        if self.face:
-            mesh = Trimesh(vertices=self.icosphere.vertices, faces=self.icosphere.faces)
-            self.face_centers = mesh.triangles_center  # (n,3)
-            self.face_centers = (
-                self.face_centers / np.linalg.norm(self.face_centers, axis=1)[:, None]
-            )
-            self.face_sphere = Sphere(xyz=self.face_centers)
-
-        self.n_mesh = (
-            len(self.icosphere.vertices) if not self.face else len(self.face_centers)
-        )
-        self.sphere = self.icosphere if not self.face else self.face_sphere
 
         # Search directory for *<n_fibers>fibers*.mat files
         if glob_name is not None:
@@ -399,7 +363,10 @@ class GeneratedMeshDataset(Dataset):
                 )
             else:
                 mat_files = sorted(list(Path(directory).glob(f"*{n_fibers}fibers*.mat")))
-        mat_files = sorted(mat_files, key=lambda f: int(re.search(r'_(\d+)(?=\.)', str(f)).group(1)) if re.search(r'_(\d+)(?=\.)', str(f)) else float('inf'))
+
+        # Sort by basename
+        mat_files = sorted(mat_files, key=lambda f: f.stem)
+        # mat_files = sorted(mat_files, key=lambda f: int(re.search(r'_(\d+)(?=\.)', str(f)).group(1)) if re.search(r'_(\d+)(?=\.)', str(f)) else float('inf'))
         print(mat_files)
 
         # Append each ODF in file to list
@@ -409,7 +376,7 @@ class GeneratedMeshDataset(Dataset):
             self.fixels = []
         if return_fissile:
             self.fissile_outputs = []
-        for mat_file in mat_files:
+        for mat_file in tqdm(mat_files, desc="Loading .mat files"):
             mat_dict_list = load_fissile_mat(mat_file)
             for mat_dict in mat_dict_list:
                 theta = mat_dict["true_theta"]
@@ -458,32 +425,18 @@ class GeneratedMeshDataset(Dataset):
                 r, theta, phi = cart2sphere(x, y, z)
 
                 # Sample total_odf along mesh
-                if self.face:
-                    total_odf_mesh = sh_to_sf(
-                        total_odf,
-                        self.face_sphere,
-                        sh_order_max=self.l_max,
-                        basis_type="tournier07",
-                    )
-                else:
-                    total_odf_mesh = sh_to_sf(
-                        total_odf,
-                        self.icosphere,
-                        sh_order_max=self.l_max,
-                        basis_type="tournier07",
-                    )
+                total_odf_mesh = sh_to_sf(
+                    total_odf,
+                    self.icosphere,
+                    sh_order_max=self.l_max,
+                    basis_type="tournier07",
+                )
 
-                if self.face:
-                    pdf = [
-                        v
-                        * vonmises_fisher(mu, self.kappa).pdf(self.face_sphere.vertices)
-                        for v, mu in zip(vol, xyz.T)
-                    ]
-                else:
-                    pdf = [
-                        v * vonmises_fisher(mu, self.kappa).pdf(self.icosphere.vertices)
-                        for v, mu in zip(vol, xyz.T)
-                    ]
+
+                pdf = [
+                    v * vonmises_fisher(mu, self.kappa).pdf(self.icosphere.vertices)
+                    for v, mu in zip(vol, xyz.T)
+                ]
                 pdf_mesh = np.sum(pdf, axis=0)
 
                 # Now return
@@ -521,7 +474,7 @@ class GeneratedMeshNIFTIDataset(Dataset):
         n_fibers,
         nifti_path,
         subdivide=3,
-        kappa=100,
+        kappa=100
     ):
         """Load ODFs from a directory of .mat files from FISSILE outputs.
 
@@ -538,13 +491,13 @@ class GeneratedMeshNIFTIDataset(Dataset):
         """
         self.n_fibers = n_fibers
         self.nifti_path = nifti_path
-
-        self.icosphere = hemi_icosahedron.subdivide(n=subdivide)
-        self.kappa = kappa
         self.l_max = 6
 
+        self.icosphere = hemi_icosahedron.subdivide(n=subdivide)
         self.n_mesh = len(self.icosphere.vertices)
         self.sphere = self.icosphere
+
+        self.kappa = kappa
 
         # Load NIFTI
         nifti = nib.load(nifti_path)
@@ -555,17 +508,13 @@ class GeneratedMeshNIFTIDataset(Dataset):
 
         # Append each ODF in file to list
         self.total_odf_meshes = []
-        for i in range(nifti_data.shape[0]):
-            odf = nifti_data[i]
-            total_odf_mesh = sh_to_sf(
-                odf,
-                self.icosphere,
-                sh_order_max=self.l_max,
-                basis_type="tournier07",
-            )
-        
-            total_odf_mesh = torch.tensor(total_odf_mesh, dtype=torch.float32)
-            self.total_odf_meshes.append(total_odf_mesh)
+        self.total_odf_meshes = sh_to_sf(
+            nifti_data,
+            self.icosphere,
+            sh_order_max=self.l_max,
+            basis_type="tournier07",
+        )
+        self.total_odf_meshes = torch.tensor(self.total_odf_meshes, dtype=torch.float32)
 
     def __len__(self):
         return len(self.total_odf_meshes)
