@@ -405,7 +405,8 @@ class GeneratedMeshDataset(Dataset):
                 )
             else:
                 mat_files = sorted(list(Path(directory).glob(f"*{n_fibers}fibers*.mat")))
-        mat_files = sorted(mat_files, key=lambda f: int(re.search(r'_(\d+)(?=\.)', str(f)).group(1)) if re.search(r'_(\d+)(?=\.)', str(f)) else float('inf'))
+        mat_files = sorted(mat_files, key=lambda f: f.stem)
+        # mat_files = sorted(mat_files, key=lambda f: int(re.search(r'_(\d+)(?=\.)', str(f)).group(1)) if re.search(r'_(\d+)(?=\.)', str(f)) else float('inf'))
         print(mat_files)
 
         # Append each ODF in file to list

@@ -3,10 +3,10 @@ from datetime import datetime
 
 lr = 1e-3
 batch_size = 512
-n_steps = 10000
+n_steps = 20000
 validation_patience = 5
 loss = "MSE"
-model = "mesh_scnn"
+model = "mesh_mlp"
 gpu_id = 0
 seed = 42
 mesh_subdivide = 1
@@ -41,6 +41,7 @@ amp_threshold = 0.1
 model_path = f"./models/{name}/best_model.pth"
 
 deep_fixel.test_mesh_model(
+    model=model,
     model_path=model_path,
     batch_size=batch_size,
     n_fibers=n_fibers,

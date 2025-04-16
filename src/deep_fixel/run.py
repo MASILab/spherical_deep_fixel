@@ -190,6 +190,7 @@ def train_mesh_model(
             break
 
 def test_mesh_model(
+    model,
     model_path,
     n_fibers,
     subdivide_mesh,
@@ -210,8 +211,15 @@ def test_mesh_model(
     device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
 
     # Load the model
-    model = CrossingFiberMeshMLP(n_mesh=n_mesh)
-    model.load_state_dict(torch.load(model_path, weights_only=True, map_location=device))
+    strict = False if model == "mesh_scnn" else True
+    if model == "mesh_mlp":
+        model = CrossingFiberMeshMLP(n_mesh=n_mesh, device=device, sphere=sphere)
+    elif model == 'mesh_scnn':
+        model = CrossingFiberMeshSCNN(device=device, n_side=8, depth=5, patch_size=1, sh_degree=6, pooling_mode='average', pooling_name='spherical', use_hemisphere=True,
+            in_channels=1, out_channels=1, filter_start=2, block_depth=1, in_depth=1, kernel_sizeSph=3, kernel_sizeSpa=3, isoSpa=True, keepSphericalDim = True)
+    else:
+        raise ValueError(f"Model {model} not recognized")
+    model.load_state_dict(torch.load(model_path, map_location=device), strict=strict)
     model.to(device)
 
     m_list, l_list = sph_harm_ind_list(6)
@@ -260,7 +268,6 @@ def test_mesh_model(
 
                 true_odf = np.array([convert_sh_descoteaux_tournier(gen_dirac(m_list, l_list, theta=t, phi=p))*v for t, p, v in zip(theta, phi, vol)])
                 est_odf, est_dirs, est_vol = pdf2odfs(single_output, sphere, amp_threshold=amp_threshold)
-
 
                 # Match them
                 est_odf_matched, index_array = match_odfs(true_odf, est_odf)
