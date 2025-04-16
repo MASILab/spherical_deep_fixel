@@ -7,7 +7,7 @@ from scipy.stats import wilcoxon
 
 results_dir = Path("/fs5/p_masi/saundam1/outputs/crossing_fibers/results")
 
-experiments = ["fod2fixel_2", "deepfixel_mesh_mlp_healpix_2025-04-14_11-18-12", "deepfixel_mesh_scnn_healpix_2025-04-14_12-21-03"]
+experiments = ["fod2fixel_2", "deepfixel_mesh_mlp_healpix_2025-04-15_08-32-03", "deepfixel_mesh_scnn_healpix_2025-04-14_12-21-03"]
 experiment_names = ["fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"]
 
 total_results = []

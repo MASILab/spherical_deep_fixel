@@ -210,6 +210,7 @@ dependencies = [
     { name = "pyyaml" },
     { name = "scipy" },
     { name = "seaborn" },
+    { name = "statannotations" },
     { name = "tensorboard" },
     { name = "torch" },
     { name = "torchaudio" },
@@ -236,6 +237,7 @@ requires-dist = [
     { name = "pyyaml", specifier = "==6.0.1" },
     { name = "scipy", specifier = "==1.13.0" },
     { name = "seaborn", specifier = ">=0.13.2" },
+    { name = "statannotations", specifier = ">=0.7.2" },
     { name = "tensorboard", specifier = "==2.16.2" },
     { name = "torch", specifier = "==2.3.0" },
     { name = "torchaudio", specifier = "==2.3.0" },
@@ -1191,6 +1193,22 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/44/cd/a040c4b3119bbe532e5b0732286f805445375489fceaec1f48306068ee3b/smmap-5.0.2.tar.gz", hash = "sha256:26ea65a03958fa0c8a1c7e8c7a58fdc77221b8910f6be2131affade476898ad5", size = 22329 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/04/be/d09147ad1ec7934636ad912901c5fd7667e1c858e19d355237db0d0cd5e4/smmap-5.0.2-py3-none-any.whl", hash = "sha256:b30115f0def7d7531d22a0fb6502488d879e75b260a9db4d0819cfb25403af5e", size = 24303 },
+]
+
+[[package]]
+name = "statannotations"
+version = "0.7.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "pandas" },
+    { name = "scipy" },
+    { name = "seaborn" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/07/6d/9f851b0ca42eb429f1b044634d63ff07bc4f6bbfb52639ceb7e03a5a46eb/statannotations-0.7.2.tar.gz", hash = "sha256:a93e428682d66c9fca5a399d5bd3fe7c9cef0500f53840c6f5362526b4501e93", size = 46629 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f1/ef/19390fa617d0417dd432d14a10eb5735a5513d7b6aebb357b10900d42af8/statannotations-0.7.2-py3-none-any.whl", hash = "sha256:61cd63c9bcdffe37dad30bb2a33aa6aa03f28df9636eda8deae1548f91be8580", size = 39684 },
 ]
 
 [[package]]

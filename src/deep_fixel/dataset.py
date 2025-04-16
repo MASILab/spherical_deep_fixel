@@ -17,6 +17,7 @@ from pathlib import Path
 import re
 from .utils import load_fissile_mat
 from hsd.utils.sampling import HealpixSampling
+from tqdm import tqdm, trange
 
 class RandomODFDataset(IterableDataset):
     def __init__(self, n_fibers, l_max=6, seed=None, size=None, deterministic=False):
@@ -174,7 +175,6 @@ class RandomFixelDataset(IterableDataset):
         else:
             while True:
                 yield self.generate_odf()
-
 
 class RandomMeshDataset(IterableDataset):
     def __init__(
@@ -405,6 +405,8 @@ class GeneratedMeshDataset(Dataset):
                 )
             else:
                 mat_files = sorted(list(Path(directory).glob(f"*{n_fibers}fibers*.mat")))
+
+        # Sort by basename
         mat_files = sorted(mat_files, key=lambda f: f.stem)
         # mat_files = sorted(mat_files, key=lambda f: int(re.search(r'_(\d+)(?=\.)', str(f)).group(1)) if re.search(r'_(\d+)(?=\.)', str(f)) else float('inf'))
         print(mat_files)
@@ -416,7 +418,7 @@ class GeneratedMeshDataset(Dataset):
             self.fixels = []
         if return_fissile:
             self.fissile_outputs = []
-        for mat_file in mat_files:
+        for mat_file in tqdm(mat_files, desc="Loading .mat files"):
             mat_dict_list = load_fissile_mat(mat_file)
             for mat_dict in mat_dict_list:
                 theta = mat_dict["true_theta"]
@@ -464,12 +466,14 @@ class GeneratedMeshDataset(Dataset):
                 x, y, z = xyz
                 r, theta, phi = cart2sphere(x, y, z)
 
+                # Sample total_odf along mesh
                 total_odf_mesh = sh_to_sf(
                     total_odf,
                     self.icosphere,
                     sh_order_max=self.l_max,
                     basis_type="tournier07",
                 )
+
 
                 pdf = [
                     v * vonmises_fisher(mu, self.kappa).pdf(self.icosphere.vertices)
@@ -566,17 +570,13 @@ class GeneratedMeshNIFTIDataset(Dataset):
 
         # Append each ODF in file to list
         self.total_odf_meshes = []
-        for i in range(nifti_data.shape[0]):
-            odf = nifti_data[i]
-            total_odf_mesh = sh_to_sf(
-                odf,
-                self.icosphere,
-                sh_order_max=self.l_max,
-                basis_type="tournier07",
-            )
-        
-            total_odf_mesh = torch.tensor(total_odf_mesh, dtype=torch.float32)
-            self.total_odf_meshes.append(total_odf_mesh)
+        self.total_odf_meshes = sh_to_sf(
+            nifti_data,
+            self.icosphere,
+            sh_order_max=self.l_max,
+            basis_type="tournier07",
+        )
+        self.total_odf_meshes = torch.tensor(self.total_odf_meshes, dtype=torch.float32)
 
     def __len__(self):
         return len(self.total_odf_meshes)

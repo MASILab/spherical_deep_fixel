@@ -48,7 +48,7 @@ lr = 1e-3
 mesh_subdivide = 1
 kappa = 100
 batch_size = 512
-mlp_model_path = Path("../models/deepfixel_mesh_mlp_healpix_2025-04-14_11-18-12/best_model.pth")
+mlp_model_path = Path("../models/deepfixel_mesh_mlp_healpix_2025-04-15_08-32-03/best_model.pth")
 scnn_model_path = Path("../models/deepfixel_mesh_scnn_healpix_2025-04-14_12-21-03/best_model.pth")
 
 test_dir = Path("/fs5/p_masi/saundam1/outputs/crossing_fibers/fissile_data")
