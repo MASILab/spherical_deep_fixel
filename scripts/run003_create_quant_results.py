@@ -45,6 +45,10 @@ annotator.apply_and_annotate()
 # Rename x-axis labels
 ax[0].set_xticklabels(["fod2fixel", "DeepFixel MLP", "DeepFixel\nSpherical CNN"])
 
+# Also get median and IQR
+print("Total results median and IQR")
+print(total_results.groupby("experiment")["acc"].agg(["median", lambda x: np.percentile(x, 75) - np.percentile(x, 25)]))
+
 # Plot sensitivity to volume fraction and angular separation in separate plots
 sns.lineplot(x="vol_frac", y="acc", hue="method", hue_order=["fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"], data=sensitivity_results[sensitivity_results["experiment"] == "vol"], estimator="median", errorbar=("pi", 50), err_style="band", markeredgecolor=None, ax=ax[1], marker='.', markersize=4)
 ax[1].set_yscale('log')
