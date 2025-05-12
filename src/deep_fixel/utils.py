@@ -21,7 +21,7 @@ from scipy.spatial.transform import Rotation as R
 from scipy.io import loadmat
 import cmcrameri 
 
-def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.1):
+def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.1, sphere=None):
     """Plot a spherical orientation distribution function represented by spherical harmonic coefficients.
 
     Parameters
@@ -38,6 +38,8 @@ def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.
         Opacity, by default 1
     linewidth : float, optional
         Linewidth for the ODF, by default 0.1
+    sphere : Dipy Sphere, optional
+        Sphere to plot the ODF on. If provided, ODF is amplitudes, not spherical harmonic coefficients.
 
     Returns
     -------
@@ -48,16 +50,20 @@ def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.
         odf = odf[:, None]
     if ax is None:
         fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-    sphere = unit_icosahedron.subdivide(n=4)
-    x, y, z = sphere.vertices.T
-    _, theta, phi = cart2sphere(x, y, z)
-    l_max = order_from_ncoef(odf.shape[0])
-    if basis == "tournier":
-        B = real_sh_tournier(sh_order_max=l_max, theta=theta, phi=phi)[0]
+
+    if sphere is not None:
+        odf_verts = sphere.vertices * odf
     else:
-        B = real_sh_descoteaux(sh_order_max=l_max, theta=theta, phi=phi)[0]
-    odf_amp = B @ odf
-    odf_verts = sphere.vertices * odf_amp
+        sphere = unit_icosahedron.subdivide(n=4)
+        x, y, z = sphere.vertices.T
+        _, theta, phi = cart2sphere(x, y, z)
+        l_max = order_from_ncoef(odf.shape[0])
+        if basis == "tournier":
+            B = real_sh_tournier(sh_order_max=l_max, theta=theta, phi=phi)[0]
+        else:
+            B = real_sh_descoteaux(sh_order_max=l_max, theta=theta, phi=phi)[0]
+        odf_amp = B @ odf
+        odf_verts = sphere.vertices * odf_amp
     ax.plot_trisurf(
         odf_verts[:, 0],
         odf_verts[:, 1],

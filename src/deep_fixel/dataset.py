@@ -2,12 +2,19 @@ import numpy as np
 import torch
 from dipy.core.geometry import cart2sphere, sphere2cart
 from dipy.core.sphere import Sphere, hemi_icosahedron
+from dipy.core.gradients import gradient_table
+from dipy.io.gradients import read_bvals_bvecs
+from dipy.data import get_fnames
+from dipy.data.fetcher import fetch_stanford_hardi
 from dipy.reconst.shm import (
     convert_sh_descoteaux_tournier,
     gen_dirac,
     sh_to_sf,
+    sf_to_sh,
     sph_harm_ind_list,
 )
+from dipy.sims.voxel import add_noise
+from dipy.reconst.csdeconv import ConstrainedSphericalDeconvModel, AxSymShResponse
 from numpy.random import default_rng
 from scipy.stats import vonmises_fisher
 from torch.utils.data import Dataset, IterableDataset
@@ -15,9 +22,12 @@ from trimesh import Trimesh
 import nibabel as nib
 from pathlib import Path
 import re
-from .utils import load_fissile_mat
+from .utils import load_fissile_mat, rotate_odf
 from hsd.utils.sampling import HealpixSampling
 from tqdm import tqdm, trange
+from scipy.spatial.transform import Rotation as R
+import os
+
 
 class RandomODFDataset(IterableDataset):
     def __init__(self, n_fibers, l_max=6, seed=None, size=None, deterministic=False):
@@ -176,6 +186,7 @@ class RandomFixelDataset(IterableDataset):
             while True:
                 yield self.generate_odf()
 
+
 class RandomMeshDataset(IterableDataset):
     def __init__(
         self,
@@ -187,7 +198,9 @@ class RandomMeshDataset(IterableDataset):
         size=None,
         deterministic=False,
         return_fixels=False,
-        healpix=False
+        healpix=False,
+        csd=False,
+        snr=None,
     ):
         """Generate ODFs at random angles and volume fractions (using Tournier07/mrtrix convention)
 
@@ -200,7 +213,7 @@ class RandomMeshDataset(IterableDataset):
         l_max : int, optional
             Maximum spherical harmonic order, by default 6
         subdivide : int, optional
-            Number of times to subdivide the ico-hemisphere if healpix=False, 
+            Number of times to subdivide the ico-hemisphere if healpix=False,
             otherwise corresponds to depth of Healpix sampling (where smaller is more vertices), by default 3
         kappa : float, optional
             Concentration parameter for von Mises-Fisher distribution, by default 100
@@ -212,6 +225,10 @@ class RandomMeshDataset(IterableDataset):
             If True, return fixels along with PDF meshes, by default False
         healpix : bool, optional
             If True, sample on healpix instead of icosphere, by default False
+        csd : bool, optional
+            If True, use CSD instead of simulating Dirac delta functions, by default False
+        snr : float, optional
+            Signal to noise ratio for CSD, by default None
         """
         self.n_fibers = n_fibers
         self.seed = seed
@@ -222,16 +239,62 @@ class RandomMeshDataset(IterableDataset):
         self.l_max = l_max
         self.deteministic = deterministic
 
+        self.csd = csd
+        self.snr = snr
+        if self.csd:
+            # Create gradient table from Stanford HARDI and extract 2000 shell
+            dmri_path, bval_path, bvec_path = get_fnames(name="stanford_hardi")
+            bval, bvec = read_bvals_bvecs(bval_path, bvec_path)
+            self.gtab = gradient_table(
+                bvals=bval,
+                bvecs=bvec,
+            )
+            self.gtab_sphere = Sphere(
+                x=self.gtab.bvecs[:, 0],
+                y=self.gtab.bvecs[:, 1],
+                z=self.gtab.bvecs[:, 2],
+            )
+
+            # First, simulate a response function
+            b = 2000
+            lambda_mean = 0.9e-3
+            lambda_perp = 0.6 * lambda_mean
+            S0 = 1
+            sphere = hemi_icosahedron.subdivide(n=4)
+            theta = sphere.theta
+            response_amp = np.exp(-b * lambda_perp) * np.exp(
+                -3 * b * (lambda_mean - lambda_perp) * (np.cos(theta) ** 2)
+            )
+            self.response_sh = sf_to_sh(
+                response_amp,
+                sphere,
+                sh_order_max=6,
+                basis_type="descoteaux07",
+            )
+            m_list, l_list = sph_harm_ind_list(6)
+            self.response = AxSymShResponse(
+                S0, self.response_sh[(m_list == 0) & (l_list % 2 == 0)]
+            )
+            self.csd_model = ConstrainedSphericalDeconvModel(
+                self.gtab, response=self.response, sh_order_max=self.l_max
+            )
+
         if healpix:
             n_side = 8
             depth = subdivide
             patch_size = 1
             sh_degree = 6
-            pooling_mode = 'average'
-            pooling_name = 'mixed'
+            pooling_mode = "average"
+            pooling_name = "mixed"
             use_hemisphere = True
             sampling = HealpixSampling(
-                n_side, depth, patch_size, sh_degree, pooling_mode, pooling_name, use_hemisphere
+                n_side,
+                depth,
+                patch_size,
+                sh_degree,
+                pooling_mode,
+                pooling_name,
+                use_hemisphere,
             )
             vecs = sampling.vec[0]
             self.icosphere = Sphere(xyz=vecs)
@@ -239,9 +302,7 @@ class RandomMeshDataset(IterableDataset):
             self.sphere = self.icosphere
         else:
             self.icosphere = hemi_icosahedron.subdivide(n=subdivide)
-            self.n_mesh = (
-                len(self.icosphere.vertices)
-            )
+            self.n_mesh = len(self.icosphere.vertices)
             self.sphere = self.icosphere
         self.kappa = kappa
 
@@ -270,14 +331,49 @@ class RandomMeshDataset(IterableDataset):
         x, y, z = xyz
         r, theta, phi = cart2sphere(x, y, z)
 
-        # Simulate ODFs at these angles and volume fractions
-        odfs = [
-            v
-            * convert_sh_descoteaux_tournier(gen_dirac(self.m_list, self.l_list, t, p))
-            for v, t, p in zip(vol, theta, phi)
-        ]
-        odfs = np.array(odfs)
-        total_odf = np.sum(odfs, axis=0)
+        if self.csd:
+            # Simulate diffusion ODFs at given angles/volume fractions, sample and fit CSD
+            total_dodf = np.zeros((28,))
+            for j in range(n_fibers):
+                # Rotate the response function
+                rot = R.from_euler("ZYZ", [phi[j], -theta[j], 0])
+                rotated_response = rotate_odf(self.response_sh, rot)
+
+                # Simulate the ODF
+                odf = vol[j] * rotated_response
+                total_dodf += odf
+
+            # Now project onto gtab_sphere and add noise
+            total_dodf_gtab = sh_to_sf(
+                total_dodf,
+                self.gtab_sphere,
+                sh_order_max=self.l_max,
+                basis_type="tournier07",
+            )
+            if self.snr is not None:
+                total_dodf_gtab = add_noise(
+                    total_dodf_gtab,
+                    snr=self.snr,
+                    S0=1,
+                    noise_type="rician",
+                    rng=self.rng,
+                )
+
+            # Fit CSD
+            total_odf = self.csd_model.fit(total_dodf_gtab).shm_coeff
+            total_odf = convert_sh_descoteaux_tournier(total_odf)
+
+        else:
+            # Simulate ODFs at these angles and volume fractions
+            odfs = [
+                v
+                * convert_sh_descoteaux_tournier(
+                    gen_dirac(self.m_list, self.l_list, t, p)
+                )
+                for v, t, p in zip(vol, theta, phi)
+            ]
+            odfs = np.array(odfs)
+            total_odf = np.sum(odfs, axis=0)
 
         # Sample total_odf along mesh
         total_odf_mesh = sh_to_sf(
@@ -327,6 +423,7 @@ class RandomMeshDataset(IterableDataset):
             while True:
                 yield self.generate_odf()
 
+
 class GeneratedMeshDataset(Dataset):
     def __init__(
         self,
@@ -365,17 +462,22 @@ class GeneratedMeshDataset(Dataset):
         self.directory = directory
         self.l_max = 6
 
-
         if healpix:
             n_side = 8
             depth = subdivide
             patch_size = 1
             sh_degree = self.l_max
-            pooling_mode = 'average'
-            pooling_name = 'mixed'
+            pooling_mode = "average"
+            pooling_name = "mixed"
             use_hemisphere = True
             sampling = HealpixSampling(
-                n_side, depth, patch_size, sh_degree, pooling_mode, pooling_name, use_hemisphere
+                n_side,
+                depth,
+                patch_size,
+                sh_degree,
+                pooling_mode,
+                pooling_name,
+                use_hemisphere,
             )
             vecs = sampling.vec[0]
             self.icosphere = Sphere(xyz=vecs)
@@ -383,11 +485,8 @@ class GeneratedMeshDataset(Dataset):
             self.sphere = self.icosphere
         else:
             self.icosphere = hemi_icosahedron.subdivide(n=subdivide)
-            self.n_mesh = (
-                len(self.icosphere.vertices)
-            )
+            self.n_mesh = len(self.icosphere.vertices)
             self.sphere = self.icosphere
-
 
         self.kappa = kappa
 
@@ -404,7 +503,9 @@ class GeneratedMeshDataset(Dataset):
                     Path(directory).glob("*3fibers*.mat")
                 )
             else:
-                mat_files = sorted(list(Path(directory).glob(f"*{n_fibers}fibers*.mat")))
+                mat_files = sorted(
+                    list(Path(directory).glob(f"*{n_fibers}fibers*.mat"))
+                )
 
         # Sort by basename
         mat_files = sorted(mat_files, key=lambda f: f.stem)
@@ -474,7 +575,6 @@ class GeneratedMeshDataset(Dataset):
                     basis_type="tournier07",
                 )
 
-
                 pdf = [
                     v * vonmises_fisher(mu, self.kappa).pdf(self.icosphere.vertices)
                     for v, mu in zip(vol, xyz.T)
@@ -510,6 +610,7 @@ class GeneratedMeshDataset(Dataset):
         else:
             return self.pdf_meshes[idx], self.total_odf_meshes[idx]
 
+
 class GeneratedMeshNIFTIDataset(Dataset):
     def __init__(
         self,
@@ -544,11 +645,17 @@ class GeneratedMeshNIFTIDataset(Dataset):
             depth = subdivide
             patch_size = 1
             sh_degree = 6
-            pooling_mode = 'average'
-            pooling_name = 'mixed'
+            pooling_mode = "average"
+            pooling_name = "mixed"
             use_hemisphere = True
             sampling = HealpixSampling(
-                n_side, depth, patch_size, sh_degree, pooling_mode, pooling_name, use_hemisphere
+                n_side,
+                depth,
+                patch_size,
+                sh_degree,
+                pooling_mode,
+                pooling_name,
+                use_hemisphere,
             )
             vecs = sampling.vec[0]
             self.icosphere = Sphere(xyz=vecs)
@@ -563,7 +670,7 @@ class GeneratedMeshNIFTIDataset(Dataset):
 
         # Load NIFTI
         nifti = nib.load(nifti_path)
-        
+
         # Flatten all except last axis
         nifti_data = nifti.get_fdata().squeeze()
         nifti_data = nifti_data.reshape(-1, nifti_data.shape[-1])
