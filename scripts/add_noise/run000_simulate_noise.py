@@ -1,17 +1,22 @@
 from deep_fixel.dataset import RandomMeshDataset
 import numpy as np
-import torch 
+import torch
 from pathlib import Path
 from deep_fixel.utils import plot_multiple_odf, plot_odf, rotate_odf, plot_mesh
 import matplotlib.pyplot as plt
 from dipy.core.geometry import cart2sphere, sphere2cart
-from dipy.core.sphere import Sphere, hemi_icosahedron
+from dipy.core.sphere import Sphere, hemi_icosahedron, unit_icosahedron
 from dipy.core.gradients import gradient_table
 from dipy.io.gradients import read_bvals_bvecs
 from dipy.io.image import load_nifti
 from dipy.data import get_fnames
 from dipy.sims.voxel import add_noise, single_tensor_odf
-from dipy.reconst.csdeconv import ConstrainedSphericalDeconvModel, AxSymShResponse, recursive_response, auto_response_ssst
+from dipy.reconst.csdeconv import (
+    ConstrainedSphericalDeconvModel,
+    AxSymShResponse,
+    recursive_response,
+    auto_response_ssst,
+)
 from dipy.reconst.shm import (
     convert_sh_descoteaux_tournier,
     gen_dirac,
@@ -40,13 +45,18 @@ gtab_sphere = Sphere(x=gtab.bvecs[:, 0], y=gtab.bvecs[:, 1], z=gtab.bvecs[:, 2])
 # First, simulate a response function
 b = 2000
 lambda_mean = 0.9e-3
-lambda_perp = 0.6*lambda_mean
+lambda_perp = 0.6 * lambda_mean
 S0 = 1
 
 # Plot response on sphere
 sphere = hemi_icosahedron.subdivide(n=4)
+full_sphere = unit_icosahedron.subdivide(n=4)
 theta = sphere.theta
-response_amp = np.exp(-b * lambda_perp)*np.exp(-3*b*(lambda_mean - lambda_perp)* (np.cos(theta)**2))
+g = np.array([0, 0, 1])
+cos_theta = np.dot(sphere.vertices, g)
+response_amp = np.exp(-b * lambda_perp) * np.exp(
+    -3 * b * (lambda_mean - lambda_perp) * (cos_theta**2)
+)
 response_sh = sf_to_sh(
     response_amp,
     sphere,
@@ -89,6 +99,7 @@ response = AxSymShResponse(S0, response_sh[(m_list == 0) & (l_list % 2 == 0)])
 response_plot = response.on_sphere(sphere)
 ax = plot_odf(response_sh, basis="descoteaux07")
 ax.set_title("Response function")
+plt.show()
 
 # Generate data from random mesh dataset
 dataset = RandomMeshDataset(
@@ -99,7 +110,7 @@ dataset = RandomMeshDataset(
     seed=42,
     deterministic=True,
     size=1000,
-    healpix=True
+    healpix=True,
 )
 
 # Plot a few samples
@@ -109,7 +120,6 @@ n_fibers = dataset.n_fibers
 total_odfs = []
 total_dodfs_noisy = []
 for i in range(5):
-
     # Generate random volume fraction using Dirichlet distribution
     vol = dataset.rng.dirichlet(np.ones(n_fibers))
 
@@ -125,7 +135,9 @@ for i in range(5):
     # Simulate ODFs at these angles and volume fractions
     odfs = [
         v
-        * convert_sh_descoteaux_tournier(gen_dirac(dataset.m_list, dataset.l_list, t, p))
+        * convert_sh_descoteaux_tournier(
+            gen_dirac(dataset.m_list, dataset.l_list, t, p)
+        )
         for v, t, p in zip(vol, theta, phi)
     ]
     odfs = np.array(odfs)
@@ -133,27 +145,44 @@ for i in range(5):
     total_odfs.append(total_odf)
 
     # Simulate *diffusion* ODFs at these angles and volume fractions by rotating the response function
-    total_dodf = np.zeros((28,))
+    total_dodf = np.zeros(gtab_sphere.vertices.shape[0])
     for j in range(n_fibers):
         # Rotate the response function
-        rot = R.from_euler("ZYZ", [phi[j], -theta[j], 0])
-        rotated_response = rotate_odf(response_sh, rot)
+        rot = R.from_euler("ZYZ", [phi[j], theta[j], 0])
+
+        g = np.array([0, 0, 1])
+        g = rot.as_matrix() @ g
+        cos_theta = np.dot(gtab_sphere.vertices, g)
+        response_amp = np.exp(-b * lambda_perp) * np.exp(
+            -3 * b * (lambda_mean - lambda_perp) * (cos_theta**2)
+        )
+        # response_sh = sf_to_sh(
+        #     response_amp,
+        #     sphere,
+        #     sh_order_max=6,
+        #     basis_type="descoteaux07",
+        # )
+        # rotated_response = rotate_odf(response_sh, rot)
+
+        # fig, ax = plt.subplots(1, subplot_kw={"projection": "3d"})
+        # ax = plot_odf(response_amp, sphere=gtab_sphere, ax=ax, color="red")
+        # plt.show()
 
         # Simulate the ODF
-        odf = vol[j] * rotated_response
+        odf = vol[j] * response_amp
         total_dodf += odf
-    
+
     # Now project onto gtab_sphere and add noise
-    total_dodf_gtab = sh_to_sf(
-        total_dodf,
-        gtab_sphere,
-        sh_order_max=dataset.l_max,
-        basis_type="tournier07",
-    )
+    # total_dodf_gtab = sh_to_sf(
+    #     total_dodf,
+    #     gtab_sphere,
+    #     sh_order_max=dataset.l_max,
+    #     basis_type="tournier07",
+    # )
 
     # Add noise
     total_dodf_noisy = add_noise(
-        total_dodf_gtab,
+        total_dodf,
         snr=30,
         S0=S0,
         noise_type="rician",
@@ -162,9 +191,7 @@ for i in range(5):
 
     print(response_sh.shape)
     csd_model = ConstrainedSphericalDeconvModel(
-        gtab,
-        response=response,
-        sh_order_max=dataset.l_max
+        gtab, response=response, sh_order_max=dataset.l_max
     )
     print(total_dodf_noisy.shape)
     total_dodf_noisy_sh = csd_model.fit(total_dodf_noisy).shm_coeff
@@ -186,16 +213,16 @@ for i in range(5):
 
 # Plot
 total_odfs = np.array(total_odfs)
-ax = plot_multiple_odf(total_odfs, color='cyan', alpha=0.15)
+ax = plot_multiple_odf(total_odfs, color="cyan", alpha=0.15)
 ax.set_title("Simulated ODFs without noise")
 
 total_odfs_noisy = np.array(total_dodfs_noisy)
-ax = plot_multiple_odf(total_odfs_noisy, color='red', alpha=0.15)
+ax = plot_multiple_odf(total_odfs_noisy, color="red", alpha=0.15)
 ax.set_title("Simulated ODFs with noise")
 
 # Plot individual ones
-ax = plot_odf(total_odfs[0], color='cyan', alpha=0.15)
-ax = plot_odf(total_odfs_noisy[0], color='red', alpha=0.5, ax=ax)
+ax = plot_odf(total_odfs[0], color="cyan", alpha=0.15)
+ax = plot_odf(total_odfs_noisy[0], color="red", alpha=0.5, ax=ax)
 ax.set_title("Simulated ODFs with noise (red) and without noise (cyan)")
 
 print(total_odfs[0])

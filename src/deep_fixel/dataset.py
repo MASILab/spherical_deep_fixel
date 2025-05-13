@@ -1,32 +1,30 @@
+from pathlib import Path
+
+import nibabel as nib
 import numpy as np
 import torch
 from dipy.core.geometry import cart2sphere, sphere2cart
-from dipy.core.sphere import Sphere, hemi_icosahedron
 from dipy.core.gradients import gradient_table
-from dipy.io.gradients import read_bvals_bvecs
+from dipy.core.sphere import Sphere, hemi_icosahedron
 from dipy.data import get_fnames
-from dipy.data.fetcher import fetch_stanford_hardi
+from dipy.io.gradients import read_bvals_bvecs
+from dipy.reconst.csdeconv import AxSymShResponse, ConstrainedSphericalDeconvModel
 from dipy.reconst.shm import (
     convert_sh_descoteaux_tournier,
     gen_dirac,
-    sh_to_sf,
     sf_to_sh,
+    sh_to_sf,
     sph_harm_ind_list,
 )
 from dipy.sims.voxel import add_noise
-from dipy.reconst.csdeconv import ConstrainedSphericalDeconvModel, AxSymShResponse
+from hsd.utils.sampling import HealpixSampling
 from numpy.random import default_rng
+from scipy.spatial.transform import Rotation as R
 from scipy.stats import vonmises_fisher
 from torch.utils.data import Dataset, IterableDataset
-from trimesh import Trimesh
-import nibabel as nib
-from pathlib import Path
-import re
-from .utils import load_fissile_mat, rotate_odf
-from hsd.utils.sampling import HealpixSampling
-from tqdm import tqdm, trange
-from scipy.spatial.transform import Rotation as R
-import os
+from tqdm import tqdm
+
+from .utils import load_fissile_mat, fiber_response
 
 
 class RandomODFDataset(IterableDataset):
@@ -256,14 +254,18 @@ class RandomMeshDataset(IterableDataset):
             )
 
             # First, simulate a response function
-            b = 2000
-            lambda_mean = 0.9e-3
-            lambda_perp = 0.6 * lambda_mean
-            S0 = 1
+            self._b = 2000
+            self._lambda_mean = 0.9e-3
+            self._lambda_perp = 0.6 * self._lambda_mean
+            self._S0 = 1
             sphere = hemi_icosahedron.subdivide(n=4)
-            theta = sphere.theta
-            response_amp = np.exp(-b * lambda_perp) * np.exp(
-                -3 * b * (lambda_mean - lambda_perp) * (np.cos(theta) ** 2)
+            response_amp = fiber_response(
+                sphere=sphere,
+                theta=0,
+                phi=0,
+                bval=self._b,
+                lambda_mean=self._lambda_mean,
+                lambda_perp=self._lambda_perp,
             )
             self.response_sh = sf_to_sh(
                 response_amp,
@@ -273,8 +275,9 @@ class RandomMeshDataset(IterableDataset):
             )
             m_list, l_list = sph_harm_ind_list(6)
             self.response = AxSymShResponse(
-                S0, self.response_sh[(m_list == 0) & (l_list % 2 == 0)]
+                self._S0, self.response_sh[(m_list == 0) & (l_list % 2 == 0)]
             )
+
             self.csd_model = ConstrainedSphericalDeconvModel(
                 self.gtab, response=self.response, sh_order_max=self.l_max
             )
@@ -333,26 +336,26 @@ class RandomMeshDataset(IterableDataset):
 
         if self.csd:
             # Simulate diffusion ODFs at given angles/volume fractions, sample and fit CSD
-            total_dodf = np.zeros((28,))
+            total_dodf = np.zeros((self.gtab_sphere.vertices.shape[0],))
             for j in range(n_fibers):
                 # Rotate the response function
-                rot = R.from_euler("ZYZ", [phi[j], -theta[j], 0])
-                rotated_response = rotate_odf(self.response_sh, rot)
+                response_amp = fiber_response(
+                    sphere=self.gtab_sphere,
+                    theta=theta[j],
+                    phi=phi[j],
+                    bval=self._b,
+                    lambda_mean=self._lambda_mean,
+                    lambda_perp=self._lambda_perp,
+                )
 
                 # Simulate the ODF
-                odf = vol[j] * rotated_response
+                odf = vol[j] * response_amp
                 total_dodf += odf
 
             # Now project onto gtab_sphere and add noise
-            total_dodf_gtab = sh_to_sf(
-                total_dodf,
-                self.gtab_sphere,
-                sh_order_max=self.l_max,
-                basis_type="tournier07",
-            )
             if self.snr is not None:
-                total_dodf_gtab = add_noise(
-                    total_dodf_gtab,
+                total_dodf = add_noise(
+                    total_dodf,
                     snr=self.snr,
                     S0=1,
                     noise_type="rician",
@@ -360,7 +363,7 @@ class RandomMeshDataset(IterableDataset):
                 )
 
             # Fit CSD
-            total_odf = self.csd_model.fit(total_dodf_gtab).shm_coeff
+            total_odf = self.csd_model.fit(total_dodf).shm_coeff
             total_odf = convert_sh_descoteaux_tournier(total_odf)
 
         else:

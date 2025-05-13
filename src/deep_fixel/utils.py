@@ -616,3 +616,41 @@ def load_fissile_mat(path):
         )
 
     return data_dict
+
+def fiber_response(
+    sphere,
+    theta=0,
+    phi=0,
+    bval=2000,
+    lambda_mean=0.9e-3,
+    lambda_perp=0.54e-3,
+):
+    """Simulate a fiber response function.
+
+    Parameters
+    ----------
+    sphere : Dipy Sphere
+        Sphere to plot the ODF on.
+    theta : float, optional
+        Angle in radians, by default 0
+    phi : float, optional
+        Angle in radians, by default 0
+    bval : float, optional
+        B-value, by default 2000
+    lambda_mean : float, optional
+        Mean diffusivity, by default 0.9e-3
+    lambda_perp : float, optional
+        Perpendicular diffusivity, by default 0.54e-3
+
+    Returns
+    -------
+    response_amp : NumPy array
+        Simulated fiber response function calculated at vertices of sphere.
+    """
+    rot = R.from_euler("ZYZ", [phi, theta, 0])
+    g = rot.as_matrix() @ np.array([0, 0, 1])
+    cos_theta = np.dot(sphere.vertices, g)
+    response_amp = np.exp(-bval * lambda_perp) * np.exp(
+        -3 * bval * (lambda_mean - lambda_perp) * (cos_theta**2)
+    )
+    return response_amp
