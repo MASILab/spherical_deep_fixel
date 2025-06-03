@@ -26,7 +26,6 @@ from tqdm import tqdm
 
 from .utils import load_fissile_mat, fiber_response
 
-
 class RandomODFDataset(IterableDataset):
     def __init__(self, n_fibers, l_max=6, seed=None, size=None, deterministic=False):
         """Generate ODFs at random angles and volume fractions (using Tournier07/mrtrix convention)
@@ -183,8 +182,7 @@ class RandomFixelDataset(IterableDataset):
         else:
             while True:
                 yield self.generate_odf()
-
-
+                
 class RandomMeshDataset(IterableDataset):
     def __init__(
         self,
@@ -308,7 +306,6 @@ class RandomMeshDataset(IterableDataset):
             self.n_mesh = len(self.icosphere.vertices)
             self.sphere = self.icosphere
         self.kappa = kappa
-
         self.return_fixels = return_fixels
 
     def generate_odf(self, seed=None):
@@ -385,7 +382,7 @@ class RandomMeshDataset(IterableDataset):
             sh_order_max=self.l_max,
             basis_type="tournier07",
         )
-
+        
         pdf = [
             v * vonmises_fisher(mu, self.kappa).pdf(self.icosphere.vertices)
             for v, mu in zip(vol, xyz.T)
