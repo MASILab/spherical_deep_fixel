@@ -21,7 +21,7 @@ from scipy.spatial.transform import Rotation as R
 from scipy.io import loadmat
 import cmcrameri 
 
-def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.1):
+def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.1, sphere=None):
     """Plot a spherical orientation distribution function represented by spherical harmonic coefficients.
 
     Parameters
@@ -38,6 +38,8 @@ def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.
         Opacity, by default 1
     linewidth : float, optional
         Linewidth for the ODF, by default 0.1
+    sphere : Dipy Sphere, optional
+        Sphere to plot the ODF on. If provided, ODF is amplitudes, not spherical harmonic coefficients.
 
     Returns
     -------
@@ -48,16 +50,20 @@ def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.
         odf = odf[:, None]
     if ax is None:
         fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-    sphere = unit_icosahedron.subdivide(n=4)
-    x, y, z = sphere.vertices.T
-    _, theta, phi = cart2sphere(x, y, z)
-    l_max = order_from_ncoef(odf.shape[0])
-    if basis == "tournier":
-        B = real_sh_tournier(sh_order_max=l_max, theta=theta, phi=phi)[0]
+
+    if sphere is not None:
+        odf_verts = sphere.vertices * odf
     else:
-        B = real_sh_descoteaux(sh_order_max=l_max, theta=theta, phi=phi)[0]
-    odf_amp = B @ odf
-    odf_verts = sphere.vertices * odf_amp
+        sphere = unit_icosahedron.subdivide(n=4)
+        x, y, z = sphere.vertices.T
+        _, theta, phi = cart2sphere(x, y, z)
+        l_max = order_from_ncoef(odf.shape[0])
+        if basis == "tournier":
+            B = real_sh_tournier(sh_order_max=l_max, theta=theta, phi=phi)[0]
+        else:
+            B = real_sh_descoteaux(sh_order_max=l_max, theta=theta, phi=phi)[0]
+        odf_amp = B @ odf
+        odf_verts = sphere.vertices * odf_amp
     ax.plot_trisurf(
         odf_verts[:, 0],
         odf_verts[:, 1],
@@ -610,3 +616,41 @@ def load_fissile_mat(path):
         )
 
     return data_dict
+
+def fiber_response(
+    sphere,
+    theta=0,
+    phi=0,
+    bval=2000,
+    lambda_mean=0.9e-3,
+    lambda_perp=0.54e-3,
+):
+    """Simulate a fiber response function.
+
+    Parameters
+    ----------
+    sphere : Dipy Sphere
+        Sphere to plot the ODF on.
+    theta : float, optional
+        Angle in radians, by default 0
+    phi : float, optional
+        Angle in radians, by default 0
+    bval : float, optional
+        B-value, by default 2000
+    lambda_mean : float, optional
+        Mean diffusivity, by default 0.9e-3
+    lambda_perp : float, optional
+        Perpendicular diffusivity, by default 0.54e-3
+
+    Returns
+    -------
+    response_amp : NumPy array
+        Simulated fiber response function calculated at vertices of sphere.
+    """
+    rot = R.from_euler("ZYZ", [phi, theta, 0])
+    g = rot.as_matrix() @ np.array([0, 0, 1])
+    cos_theta = np.dot(sphere.vertices, g)
+    response_amp = np.exp(-bval * lambda_perp) * np.exp(
+        -3 * bval * (lambda_mean - lambda_perp) * (cos_theta**2)
+    )
+    return response_amp

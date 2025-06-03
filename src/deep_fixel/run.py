@@ -25,7 +25,9 @@ def train_mesh_model(
     mesh_subdivide=3,
     kappa=100,
     save_dir="./models",
-    healpix=False
+    healpix=False,
+    csd=False,
+    snr=None
 ):
     if seed is not None:
         torch.manual_seed(seed)
@@ -48,6 +50,8 @@ def train_mesh_model(
         "kappa": kappa,
         "model": model,
         "healpix": healpix,
+        "csd": csd,
+        "snr": snr,
     }
 
     # Set up Weights and Biases
@@ -55,9 +59,9 @@ def train_mesh_model(
     run = wandb.init(project="deepfixel", name=run_name, config=config)
 
     # Set up datasets
-    train_dataset = RandomMeshDataset(n_fibers=n_fibers, l_max=6, seed=seed, subdivide=mesh_subdivide, kappa=kappa, healpix=healpix)
+    train_dataset = RandomMeshDataset(n_fibers=n_fibers, l_max=6, seed=seed, subdivide=mesh_subdivide, kappa=kappa, healpix=healpix, csd=csd, snr=snr)
     val_dataset = RandomMeshDataset(
-        n_fibers=n_fibers, l_max=6, seed=seed + 1, size=1000, deterministic=True, subdivide=mesh_subdivide, kappa=kappa, healpix=healpix
+        n_fibers=n_fibers, l_max=6, seed=seed + 1, size=1000, deterministic=True, subdivide=mesh_subdivide, kappa=kappa, healpix=healpix, csd=csd, snr=snr
     )
 
     # Set up dataloaders
