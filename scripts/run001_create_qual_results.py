@@ -88,7 +88,7 @@ print(pdf_mesh.shape, total_odf_mesh.shape, mlp_output.shape, fixels.shape, fiss
 m_list, l_list = sph_harm_ind_list(6)
 
 # Plot
-fig, ax = plt.subplots(3, 5, figsize=(10,10), subplot_kw={"projection": "3d"})
+fig, ax = plt.subplots(3, 6, figsize=(6.5,4.5), subplot_kw={"projection": "3d"})
 for i, voxel_idx in enumerate([high_voxel_index, mid_voxel_index, low_voxel_index]):
     fixel_to_plot = fixels[voxel_idx]
     fissile_odf= fissile_outputs[voxel_idx]
@@ -153,27 +153,33 @@ for i, voxel_idx in enumerate([high_voxel_index, mid_voxel_index, low_voxel_inde
     # for j, fod in enumerate(true_odf):
     #     plot_odf(fod, ax=ax[i, j+1], color="b")
     plot_multiple_odf(true_odf, ax=ax[i,1], color="r")
+    
+    # Plot estimated ODFs (FISSILE)
+    # for j, fod in enumerate(fissile_odf_matched):
+    #     plot_odf(fod, ax=ax[i, j+2], color="g")
+    plot_multiple_odf(fissile_odf_matched, ax=ax[i,2], color="y")
 
     # Plot estimated ODFs (fod2fixel)
     # for j, fod in enumerate(fissile_odf_matched):
     #     plot_odf(fod, ax=ax[i, j+4], color="g")
-    plot_multiple_odf(fod2fixel_matched, ax=ax[i,2], color="g")
+    plot_multiple_odf(fod2fixel_matched, ax=ax[i,3], color="g")
 
     # Plot estimated ODFs (DeepFixel MLP)
     # for j, fod in enumerate(fod2fixel_matched):
     #     plot_odf(fod, ax=ax[i, j+7], color="b")
-    plot_multiple_odf(est_odf_mlp_matched, ax=ax[i,3], color="m")
+    plot_multiple_odf(est_odf_mlp_matched, ax=ax[i,4], color="m")
 
     # # Plot estimated ODFs (crossing fiber net)
     # for j, fod in enumerate(est_odf_matched):
     #     plot_odf(fod, ax=ax[i, j+10], color="b")
-    plot_multiple_odf(est_odf_scnn_matched, ax=ax[i,4], color="b")
+    plot_multiple_odf(est_odf_scnn_matched, ax=ax[i,5], color="b")
 
-ax[0,0].set_title("Multi-fiber ODF")
-ax[0,1].set_title("Single-fiber ODFs")
-ax[0,2].set_title("Estimated ODFs\n(fod2fixel)")
-ax[0,3].set_title("Estimated ODFs\n(DeepFixel MLP)")
-ax[0,4].set_title("Estimated ODFs\n(DeepFixel Spherical CNN)")
+ax[0,0].set_title("Multi-fiber\nODF")
+ax[0,1].set_title("Single-fiber\nODFs")
+ax[0,2].set_title("Estimated\nODFs\n(FISSILE)")
+ax[0,3].set_title("Estimated\nODFs\n(fod2fixel)")
+ax[0,4].set_title("Estimated\nODFs\n(DeepFixel\nMLP)")
+ax[0,5].set_title("Estimated\nODFs\n(DeepFixel\nSpherical CNN)")
 
 for a in ax.flatten():
     a.tick_params(axis='both', which='major', pad=-2)
@@ -187,6 +193,7 @@ for a in ax.flatten():
 
 
 # plt.tight_layout()
-# save_dir = Path("/home/local/VANDERBILT/saundam1/Pictures/fissile")
-# plt.savefig(save_dir / "fig_qual_results.png", dpi=300)
+save_dir = Path("/home/local/VANDERBILT/saundam1/Pictures/deepfixel/spie_2025")
+save_dir.mkdir(parents=True, exist_ok=True)
+plt.savefig(save_dir / "fig_qual_results.png", dpi=600)
 plt.show()

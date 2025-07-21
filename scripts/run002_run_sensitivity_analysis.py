@@ -341,6 +341,44 @@ for method in ["fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"]:
     df_list.append(angle_results)
     df_list.append(vol_results)
 
+# Concatenate with this data:
+fissile_results = pd.read_csv("sensitivity_analysis_fissile.csv")
+
+# Need to reshape. Currently in wide form with theta, acc_theta, v, acc_v
+# Only need to set experiment = "vol" or "angle", method to "FISSILE"
+# Then set vol_frac to v and true_angular_separation to theta
+fissile_results_tidy = {
+    "voxel_index": [],
+    "experiment": [],
+    "acc": [],
+    "vol_frac": [],
+    "true_angular_separation": [],
+    "method": []
+}
+
+voxel_index = 0
+for index, row in fissile_results.iterrows():
+    fissile_results_tidy["voxel_index"].append(voxel_index)
+    fissile_results_tidy["experiment"].append("vol")
+    fissile_results_tidy["acc"].append(row["acc_v"])
+    fissile_results_tidy["vol_frac"].append(row["v"])
+    fissile_results_tidy["true_angular_separation"].append(np.nan)
+    fissile_results_tidy["method"].append("FISSILE")
+
+    voxel_index += 1
+
+    fissile_results_tidy["voxel_index"].append(voxel_index)
+    fissile_results_tidy["experiment"].append("angle")
+    fissile_results_tidy["acc"].append(row["acc_theta"])
+    fissile_results_tidy["vol_frac"].append(np.nan)
+    fissile_results_tidy["true_angular_separation"].append(row["theta"] * np.pi / 180)  # Convert to radians
+    fissile_results_tidy["method"].append("FISSILE")
+
+    voxel_index += 1
+
+fissile_results_tidy = pd.DataFrame(fissile_results_tidy)
+
 # Combine them
 combined_results = pd.concat(df_list, ignore_index=True)
+combined_results = pd.concat([combined_results, fissile_results_tidy], ignore_index=True)
 combined_results.to_csv("sensitivity_analysis_large.csv", index=False)

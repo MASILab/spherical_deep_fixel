@@ -151,7 +151,7 @@ for i in range(5):
         rot = R.from_euler("ZYZ", [phi[j], theta[j], 0])
 
         g = np.array([0, 0, 1])
-        g = rot.as_matrix() @ g
+        g = g @ rot.as_matrix().T
         cos_theta = np.dot(gtab_sphere.vertices, g)
         response_amp = np.exp(-b * lambda_perp) * np.exp(
             -3 * b * (lambda_mean - lambda_perp) * (cos_theta**2)

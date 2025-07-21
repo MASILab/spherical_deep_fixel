@@ -27,8 +27,8 @@ ax3 = fig.add_subplot(gs[1,1])
 ax = [ax1, ax2, ax3]
 
 # Plot stripplot colored by experiment and split by n_fibers
-sns.boxplot(x="experiment", y="acc", data=total_results, showfliers=False, ax=ax[0], color="white", linewidth=1.5, order=["fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"])
-sns.stripplot(x="experiment", y="acc", hue="true_n_fibers", data=total_results, jitter=0.2, alpha=0.3, ax=ax[0], palette="colorblind", order=["fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"])
+sns.boxplot(x="experiment", y="acc", data=total_results, showfliers=False, ax=ax[0], color="white", linewidth=1.5, order=["FISSILE", "fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"])
+sns.stripplot(x="experiment", y="acc", hue="true_n_fibers", data=total_results, jitter=0.2, alpha=0.3, ax=ax[0], palette="colorblind", order=["FISSILE", "fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"])
 ax[0].set_ylabel("ACC")
 ax[0].set_xlabel("")
 ax[0].legend(title="Number of fibers", loc='lower center')
@@ -43,14 +43,14 @@ annotator.configure(test="Mann-Whitney", text_format="star", loc="inside", verbo
 annotator.apply_and_annotate()
 
 # Rename x-axis labels
-ax[0].set_xticklabels(["fod2fixel", "DeepFixel MLP", "DeepFixel\nSpherical CNN"])
+ax[0].set_xticklabels(["FISSILE", "fod2fixel", "DeepFixel\nMLP", "DeepFixel\nSpherical\nCNN"])
 
 # Also get median and IQR
 print("Total results median and IQR")
 print(total_results.groupby("experiment")["acc"].agg(["median", lambda x: np.percentile(x, 75) - np.percentile(x, 25)]))
 
 # Plot sensitivity to volume fraction and angular separation in separate plots
-sns.lineplot(x="vol_frac", y="acc", hue="method", hue_order=["fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"], data=sensitivity_results[sensitivity_results["experiment"] == "vol"], estimator="median", errorbar=("pi", 50), err_style="band", markeredgecolor=None, ax=ax[1], marker='.', markersize=4)
+sns.lineplot(x="vol_frac", y="acc", hue="method", hue_order=["FISSILE", "fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"], data=sensitivity_results[sensitivity_results["experiment"] == "vol"], estimator="median", errorbar=("pi", 50), err_style="band", markeredgecolor=None, ax=ax[1], marker='.', markersize=4)
 ax[1].set_yscale('log')
 ax[1].set_xlabel("Volume fraction")
 ax[1].set_ylabel("ACC (log scale)")
@@ -62,7 +62,7 @@ legend = ax[1].get_legend()
 legend.remove()
 ax[1].legend(title="Method", loc='lower right')
 
-sns.lineplot(x="true_angular_separation", y="acc", hue="method", hue_order=["fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"], data=sensitivity_results[sensitivity_results["experiment"] == "angle"], estimator="median", errorbar=("pi", 50), err_style="band", ax=ax[2], markeredgecolor=None, marker='.', markersize=4)
+sns.lineplot(x="true_angular_separation", y="acc", hue="method", hue_order=["FISSILE", "fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"], data=sensitivity_results[sensitivity_results["experiment"] == "angle"], estimator="median", errorbar=("pi", 50), err_style="band", ax=ax[2], markeredgecolor=None, marker='.', markersize=4)
 ax[2].set_yscale('log')
 ax[2].set_xlabel("Angular separation (degrees)")
 ax[2].set_ylabel("ACC (log scale)")

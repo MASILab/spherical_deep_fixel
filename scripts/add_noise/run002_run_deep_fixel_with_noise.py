@@ -14,7 +14,7 @@ kappa = 100
 n_fibers = 'both'
 healpix = True
 csd = True
-snr = 30
+snr = None
 save_dir = "./models"
 test_dir = "./test_data"
 
