@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from dipy.core.geometry import cart2sphere
 from dipy.core.sphere import unit_icosahedron
+from dipy.direction import peak_directions, peak_directions_nl
 from dipy.reconst.shm import (
     convert_sh_descoteaux_tournier,
     convert_sh_to_full_basis,
@@ -20,6 +21,7 @@ from scipy.signal import argrelmax
 from scipy.spatial.transform import Rotation as R
 from scipy.io import loadmat
 import cmcrameri 
+from line_profiler import profile
 
 def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.1, sphere=None):
     """Plot a spherical orientation distribution function represented by spherical harmonic coefficients.
@@ -411,8 +413,7 @@ def match_odfs(true_odfs, est_odfs):
 
     return matched_est_odfs, index_array
 
-
-def pdf2odfs(mesh, sphere, amp_threshold=0.5):
+def pdf2odfs(mesh, sphere, amp_threshold=0.5, use_dipy=False, **kwargs):
     """
     Estimate ODFs from spherical PDF
 
@@ -424,6 +425,10 @@ def pdf2odfs(mesh, sphere, amp_threshold=0.5):
         Sphere mesh.
     amp_threshold : float, optional
         Amplitude threshold for maxima, by default 0.5
+    use_dipy : bool, optional
+        Whether to use Dipy's peak finding, by default True.
+    **kwargs : dict, optional
+        Additional keyword arguments for peak finding if using Dipy.
 
     Returns
     -------
@@ -434,63 +439,112 @@ def pdf2odfs(mesh, sphere, amp_threshold=0.5):
     vol_fracs : NumPy array
         Estimated volume fractions
     """
-
-    theta = np.linspace(0, np.pi, 1000)
-    phi = np.linspace(0, 2 * np.pi, 1000)
-    theta_grid, phi_grid = np.meshgrid(theta, phi)
-    points = np.array([sphere.theta, sphere.phi]).T
-    pdf_mesh_interp = CloughTocher2DInterpolator(points, mesh, fill_value=0)
-    rel_maxima = argrelmax(mesh, axis=0)
-
-    # Get top 10 as initial points
-    top_argmax = np.argsort(mesh[rel_maxima])[-10:]
-    top_verts = sphere.vertices[rel_maxima[0][top_argmax]]
-    top_theta, top_phi = (
-        sphere.theta[rel_maxima[0][top_argmax]],
-        sphere.phi[rel_maxima[0][top_argmax]],
-    )
-
-    # Minimize this
-    initial_guesses = np.array([top_theta, top_phi]).T
-    minima = []
-    for initial_guess in initial_guesses:
-        res = minimize(lambda x: -1 * pdf_mesh_interp(x), initial_guess)
-        minima.append(res.x)
-
-    # Get unique values and round to 4 decimals
-    minima = np.array(minima)
-
-    # Get values at minima
-    minima_vals = pdf_mesh_interp(minima)
-    minima_vals = minima_vals
-
-    # Get round to 4 decimals and remove repeats for both
-    minima = np.round(minima, 4)
-    minima = np.unique(minima, axis=0)
-    minima_vals = pdf_mesh_interp(minima)
-
-    # Keep only minima > 0.1
-    minima = minima[minima_vals > amp_threshold]
-    minima_vals = minima_vals[minima_vals > amp_threshold]
-
-    # Estimate volume fraction using ratio of amplitude at minima
-    minima_vals = minima_vals / np.sum(minima_vals)
-
-    # Now estimate ODF at these points with these volume fractions
-    m_list, l_list = sph_harm_ind_list(6)
-    odfs = []
-    for min, min_val in zip(minima, minima_vals):
-        odfs.append(
-            convert_sh_descoteaux_tournier(
-                gen_dirac(m_list, l_list, theta=min[0], phi=min[1])
-            )
-            * min_val
+    if use_dipy == "nl":
+        points = np.array([sphere.theta, sphere.phi]).T
+        pdf_mesh_interp = CloughTocher2DInterpolator(points, mesh, fill_value=0)
+        pdf_mesh_interp_sphere = lambda sphere: pdf_mesh_interp(
+            np.array([sphere.theta, sphere.phi]).T
         )
-    odfs = np.array(odfs)
+        xyz, vals = peak_directions_nl(
+            pdf_mesh_interp_sphere,
+            relative_peak_threshold=amp_threshold,
+            sphere=sphere,
+            **kwargs
+        )
+        vol_fracs = vals / np.sum(vals)  # Normalize volume fractions
+        r, theta, phi = cart2sphere(xyz[:, 0], xyz[:, 1], xyz[:, 2])
+        dirs = np.array([theta, phi]).T
+        odfs = []
+        m_list, l_list = sph_harm_ind_list(6)
+        for theta, phi, vol_frac in zip(dirs[:, 0], dirs[:, 1], vol_fracs):
+            odfs.append(
+                convert_sh_descoteaux_tournier(
+                    gen_dirac(m_list, l_list, theta=theta, phi=phi)
+                )
+                * vol_frac
+            )
+        odfs = np.array(odfs)
+        return odfs, dirs, vol_fracs
+    elif use_dipy:
+        xyz, vals, _ = peak_directions(
+            mesh,
+            sphere,
+            relative_peak_threshold=amp_threshold,
+            **kwargs,
+        )
 
-    dirs = minima
-    vol_fracs = minima_vals
-    return odfs, dirs, vol_fracs
+        vol_fracs = vals / np.sum(vals)  # Normalize volume fractions
+        r, theta, phi = cart2sphere(xyz[:, 0], xyz[:, 1], xyz[:, 2])
+        dirs = np.array([theta, phi]).T
+        odfs = []
+        m_list, l_list = sph_harm_ind_list(6)
+        for theta, phi, vol_frac in zip(dirs[:, 0], dirs[:, 1], vol_fracs):
+            odfs.append(
+                convert_sh_descoteaux_tournier(
+                    gen_dirac(m_list, l_list, theta=theta, phi=phi)
+                )
+                * vol_frac
+            )
+        odfs = np.array(odfs)
+
+        return odfs, dirs, vol_fracs
+    else:
+        theta = np.linspace(0, np.pi, 1000)
+        phi = np.linspace(0, 2 * np.pi, 1000)
+        theta_grid, phi_grid = np.meshgrid(theta, phi)
+        points = np.array([sphere.theta, sphere.phi]).T
+        pdf_mesh_interp = CloughTocher2DInterpolator(points, mesh, fill_value=0)
+        rel_maxima = argrelmax(mesh, axis=0)
+
+        # Get top 10 as initial points
+        top_argmax = np.argsort(mesh[rel_maxima])[-10:]
+        top_verts = sphere.vertices[rel_maxima[0][top_argmax]]
+        top_theta, top_phi = (
+            sphere.theta[rel_maxima[0][top_argmax]],
+            sphere.phi[rel_maxima[0][top_argmax]],
+        )
+
+        # Minimize this
+        initial_guesses = np.array([top_theta, top_phi]).T
+        minima = []
+        for initial_guess in initial_guesses:
+            res = minimize(lambda x: -1 * pdf_mesh_interp(x), initial_guess)
+            minima.append(res.x)
+
+        # Get unique values and round to 4 decimals
+        minima = np.array(minima)
+
+        # Get values at minima
+        minima_vals = pdf_mesh_interp(minima)
+        minima_vals = minima_vals
+
+        # Get round to 4 decimals and remove repeats for both
+        minima = np.round(minima, 4)
+        minima = np.unique(minima, axis=0)
+        minima_vals = pdf_mesh_interp(minima)
+
+        # Keep only minima > 0.1
+        minima = minima[minima_vals > amp_threshold]
+        minima_vals = minima_vals[minima_vals > amp_threshold]
+
+        # Estimate volume fraction using ratio of amplitude at minima
+        minima_vals = minima_vals / np.sum(minima_vals)
+
+        # Now estimate ODF at these points with these volume fractions
+        m_list, l_list = sph_harm_ind_list(6)
+        odfs = []
+        for min, min_val in zip(minima, minima_vals):
+            odfs.append(
+                convert_sh_descoteaux_tournier(
+                    gen_dirac(m_list, l_list, theta=min[0], phi=min[1])
+                )
+                * min_val
+            )
+        odfs = np.array(odfs)
+
+        dirs = minima
+        vol_fracs = minima_vals
+        return odfs, dirs, vol_fracs
 
 
 def angular_separation(angle1, angle2):

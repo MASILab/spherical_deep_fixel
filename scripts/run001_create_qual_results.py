@@ -79,8 +79,8 @@ with torch.no_grad():
 
 pdf_mesh = pdf_mesh.numpy()
 total_odf_mesh = total_odf_mesh.numpy()
-mlp_output = mlp_output.numpy()
-scnn_output = scnn_output.numpy()
+mlp_output = mlp_output.numpy().astype(np.float64)
+scnn_output = scnn_output.numpy().astype(np.float64)
 fixels = fixels.numpy()
 fissile_outputs = fissile_outputs.numpy()
 print(pdf_mesh.shape, total_odf_mesh.shape, mlp_output.shape, fixels.shape, fissile_outputs.shape)
@@ -101,8 +101,8 @@ for i, voxel_idx in enumerate([high_voxel_index, mid_voxel_index, low_voxel_inde
     print(f"{voxel_idx}: {theta=}, {phi=}, {vol=}")
     true_odf = np.array([convert_sh_descoteaux_tournier(gen_dirac(m_list, l_list, theta=t, phi=p)) * v for t, p, v in zip(theta, phi, vol)])
     total_odf = np.sum(true_odf, axis=0)
-    est_odf_mlp, net_est_dirs_mlp, net_est_vols_mlp = pdf2odfs(mlp_output[voxel_idx], sphere, amp_threshold=0.1)
-    est_odf_scnn, net_est_dirs_scnn, net_est_vols_scnn = pdf2odfs(scnn_output[voxel_idx], sphere, amp_threshold=0.1)
+    est_odf_mlp, net_est_dirs_mlp, net_est_vols_mlp = pdf2odfs(mlp_output[voxel_idx], sphere, use_dipy=True, amp_threshold=0.0, min_separation_angle=0.0)
+    est_odf_scnn, net_est_dirs_scnn, net_est_vols_scnn = pdf2odfs(scnn_output[voxel_idx], sphere, use_dipy=True, amp_threshold=0.0, min_separation_angle=0.0)
 
     # Load fod2fixel
     afd = nib.load(fod2fixel_dir / f"fod_{voxel_idx}" / f"afd.nii.gz").get_fdata().squeeze()

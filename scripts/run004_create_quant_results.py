@@ -8,6 +8,7 @@ import matplotlib
 import numpy as np
 import matplotlib.ticker as mticker
 from statannotations.Annotator import Annotator
+from deep_fixel.utils import angular_separation
 
 # Scale everything by 0.5
 matplotlib.rcParams['font.size'] = 8
@@ -44,8 +45,49 @@ ax.set_xticklabels(["FISSILE", "fod2fixel", "DeepFixel\nMLP", "DeepFixel\nSpheri
 print("Total results median and IQR")
 print(total_results.groupby("experiment")["acc"].agg(["median", lambda x: np.percentile(x, 75) - np.percentile(x, 25)]))
 
+# Get effect size
+fod2fixel = total_results[total_results["experiment"] == "fod2fixel"]["acc"]
+deepfixel_mlp = total_results[total_results["experiment"] == "DeepFixel MLP"]["acc"]
+deepfixel_scnn = total_results[total_results["experiment"] == "DeepFixel Spherical CNN"]["acc"]
+
+print("Effect size between DeepFixel MLP and fod2fixel:", (np.mean(deepfixel_mlp) - np.mean(fod2fixel)) / np.std(np.concatenate([deepfixel_mlp, fod2fixel])))
+print("Effect size between DeepFixel Spherical CNN and fod2fixel:", (np.mean(deepfixel_scnn) - np.mean(fod2fixel)) / np.std(np.concatenate([deepfixel_scnn, fod2fixel])))
+print("Effect size between DeepFixel MLP and DeepFixel Spherical CNN:", (np.mean(deepfixel_mlp) - np.mean(deepfixel_scnn)) / np.std(np.concatenate([deepfixel_mlp, deepfixel_scnn])))
+
 plt.tight_layout()
 
 fig.savefig("/home/local/VANDERBILT/saundam1/Pictures/deepfixel/spie_2025/fig_quant_results.png", dpi=600)
+
+plt.show()
+
+# Remove NaN rows
+total_results = total_results.dropna(subset=["angular_error"])
+total_results["angular_error"] = total_results["angular_error"] * 180 / np.pi  # Convert to degrees
+
+print("Median and IQR of angular error")
+print(total_results.groupby("experiment")["angular_error"].agg(["median", lambda x: np.percentile(x, 75) - np.percentile(x, 25)]))
+print("Median and IQR of volume fraction error")
+print(total_results.groupby("experiment")["volume_fraction_error"].agg(["median", lambda x: np.percentile(x, 75) - np.percentile(x, 25)]))
+
+# Plot angulaar error as stripplot colored by experiment and split by n_fibers
+fig, ax = plt.subplots(figsize=(6.5, 4))
+sns.boxplot(x="experiment", y="angular_error", data=total_results, showfliers=False, ax=ax, color="white", linewidth=1.5, order=["FISSILE", "fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"])
+sns.stripplot(x="experiment", y="angular_error", hue="true_n_fibers", data=total_results, jitter=0.2, alpha=0.3, ax=ax, palette="colorblind", order=["FISSILE", "fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"])
+ax.set_ylabel("Angular Error (degrees)")
+ax.set_xlabel("Method")
+ax.legend(title="Number of fibers", loc='upper left')
+legend = ax.get_legend()
+for lh in legend.legend_handles:
+    lh.set_alpha(1)
+
+fig, ax = plt.subplots(figsize=(6.5, 4))
+sns.boxplot(x="experiment", y="volume_fraction_error", data=total_results, showfliers=False, ax=ax, color="white", linewidth=1.5, order=["FISSILE", "fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"])
+sns.stripplot(x="experiment", y="volume_fraction_error", hue="true_n_fibers", data=total_results, jitter=0.2, alpha=0.3, ax=ax, palette="colorblind", order=["FISSILE", "fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"])
+ax.set_ylabel("Volume Fraction Error")
+ax.set_xlabel("Method")
+ax.legend(title="Number of fibers", loc='upper left')
+legend = ax.get_legend()
+for lh in legend.legend_handles:
+    lh.set_alpha(1)
 
 plt.show()

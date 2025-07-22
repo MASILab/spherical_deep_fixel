@@ -15,269 +15,269 @@ from dipy.core.geometry import cart2sphere, sphere2cart
 from joblib import Parallel, delayed
 import pdb
 
-# v_save_dir = Path("/fs5/p_masi/saundam1/outputs/crossing_fibers/sensitivity_large/sensitivity_dataset_v")
-# theta_save_dir = Path("/fs5/p_masi/saundam1/outputs/crossing_fibers/sensitivity_large/sensitivity_dataset_theta")
-# rand_save_dir = Path("/fs5/p_masi/saundam1/outputs/crossing_fibers/sensitivity_large/sensitivity_dataset_rand")
+v_save_dir = Path("/fs5/p_masi/saundam1/outputs/crossing_fibers/sensitivity_large/sensitivity_dataset_v")
+theta_save_dir = Path("/fs5/p_masi/saundam1/outputs/crossing_fibers/sensitivity_large/sensitivity_dataset_theta")
+rand_save_dir = Path("/fs5/p_masi/saundam1/outputs/crossing_fibers/sensitivity_large/sensitivity_dataset_rand")
 
-# seed = 42
-# lr = 1e-3
-# mesh_subdivide = 1
-# kappa = 100
-# batch_size = 512
-# amp_threshold = 0.1
-# mlp_model_path = Path("../models/deepfixel_mesh_mlp_healpix_2025-04-15_08-32-03/best_model.pth")
-# scnn_model_path = Path("../models/deepfixel_mesh_scnn_healpix_2025-04-14_12-21-03/best_model.pth")
+seed = 42
+lr = 1e-3
+mesh_subdivide = 1
+kappa = 100
+batch_size = 512
+amp_threshold = 0.1
+mlp_model_path = Path("../models/deepfixel_mesh_mlp_healpix_2025-04-15_08-32-03/best_model.pth")
+scnn_model_path = Path("../models/deepfixel_mesh_scnn_healpix_2025-04-14_12-21-03/best_model.pth")
 
-# # Load data
-# sensitivity_angle_dataset = GeneratedMeshDataset(n_fibers=2, directory=theta_save_dir, return_fixels=True, subdivide=mesh_subdivide, kappa=kappa, healpix=True)
-# sensitivity_angle_loader = DataLoader(sensitivity_angle_dataset, batch_size=512, shuffle=False)
+# Load data
+sensitivity_angle_dataset = GeneratedMeshDataset(n_fibers=2, directory=theta_save_dir, return_fixels=True, subdivide=mesh_subdivide, kappa=kappa, healpix=True)
+sensitivity_angle_loader = DataLoader(sensitivity_angle_dataset, batch_size=512, shuffle=False)
 
-# sensitivity_vol_dataset = GeneratedMeshDataset(n_fibers=2, directory=v_save_dir, return_fixels=True, subdivide=mesh_subdivide, kappa=kappa, healpix=True)
-# sensitivity_vol_loader = DataLoader(sensitivity_vol_dataset, batch_size=512, shuffle=False)
+sensitivity_vol_dataset = GeneratedMeshDataset(n_fibers=2, directory=v_save_dir, return_fixels=True, subdivide=mesh_subdivide, kappa=kappa, healpix=True)
+sensitivity_vol_loader = DataLoader(sensitivity_vol_dataset, batch_size=512, shuffle=False)
 
-# n_mesh = sensitivity_angle_dataset.n_mesh
-# sphere = sensitivity_angle_dataset.icosphere
-# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+n_mesh = sensitivity_angle_dataset.n_mesh
+sphere = sensitivity_angle_dataset.icosphere
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-# # Load the models
-# mlp_model = CrossingFiberMeshMLP(n_mesh=sensitivity_angle_dataset.n_mesh)
-# mlp_model.load_state_dict(torch.load(mlp_model_path, weights_only=True))
+# Load the models
+mlp_model = CrossingFiberMeshMLP(n_mesh=sensitivity_angle_dataset.n_mesh)
+mlp_model.load_state_dict(torch.load(mlp_model_path, weights_only=True))
 
-# scnn_model = CrossingFiberMeshSCNN(n_side=8, depth=5, patch_size=1, sh_degree=6, pooling_mode='average', pooling_name='spherical', use_hemisphere=True,
-#                   in_channels=1, out_channels=1, filter_start=2, block_depth=1, in_depth=1, kernel_sizeSph=3, kernel_sizeSpa=3, isoSpa=True, keepSphericalDim = True)
-# scnn_model.load_state_dict(torch.load(scnn_model_path, weights_only=True), strict=False)
+scnn_model = CrossingFiberMeshSCNN(n_side=8, depth=5, patch_size=1, sh_degree=6, pooling_mode='average', pooling_name='spherical', use_hemisphere=True,
+                  in_channels=1, out_channels=1, filter_start=2, block_depth=1, in_depth=1, kernel_sizeSph=3, kernel_sizeSpa=3, isoSpa=True, keepSphericalDim = True)
+scnn_model.load_state_dict(torch.load(scnn_model_path, weights_only=True), strict=False)
 
-# m_list, l_list = sph_harm_ind_list(6)
+m_list, l_list = sph_harm_ind_list(6)
 
-# for model_name in ['SCNN']:
-#     if model_name == 'MLP':
-#         model = mlp_model 
-#         output_dir = '../outputs/deepfixel_mesh_mlp_healpix_2025-04-15_08-32-03'
-#     elif model_name == 'SCNN':
-#         model = scnn_model
-#         output_dir = '../outputs/deepfixel_mesh_scnn_healpix_2025-04-14_12-21-03'
+for model_name in ['SCNN']:
+    if model_name == 'MLP':
+        model = mlp_model 
+        output_dir = '../outputs/deepfixel_mesh_mlp_healpix_2025-04-15_08-32-03'
+    elif model_name == 'SCNN':
+        model = scnn_model
+        output_dir = '../outputs/deepfixel_mesh_scnn_healpix_2025-04-14_12-21-03'
 
-#     model = model.to(device)
+    model = model.to(device)
 
-#     output_dir = Path(output_dir)
-#     output_dir.mkdir(exist_ok=True, parents=True)
+    output_dir = Path(output_dir)
+    output_dir.mkdir(exist_ok=True, parents=True)
 
-#     test_results = {
-#         "voxel_index": [],
-#         "fiber_index": [],
-#         "true_n_fibers": [],
-#         "est_n_fibers": [],
-#         "true_theta": [],
-#         "true_phi": [],
-#         "true_v": [],
-#         "est_theta_matched": [],
-#         "est_phi_matched": [],
-#         "est_v_matched": [],
-#         "acc": [],
-#     }
-#     with torch.no_grad():
+    test_results = {
+        "voxel_index": [],
+        "fiber_index": [],
+        "true_n_fibers": [],
+        "est_n_fibers": [],
+        "true_theta": [],
+        "true_phi": [],
+        "true_v": [],
+        "est_theta_matched": [],
+        "est_phi_matched": [],
+        "est_v_matched": [],
+        "acc": [],
+    }
+    with torch.no_grad():
         
-#         for idx, test_data in enumerate(tqdm(sensitivity_angle_loader, desc='angle set')):
-#             pdf_mesh, total_odf_mesh, fixels = test_data
-#             pdf_mesh = pdf_mesh.to(device)
-#             total_odf_mesh = total_odf_mesh.to(device)
+        for idx, test_data in enumerate(tqdm(sensitivity_angle_loader, desc='angle set')):
+            pdf_mesh, total_odf_mesh, fixels = test_data
+            pdf_mesh = pdf_mesh.to(device)
+            total_odf_mesh = total_odf_mesh.to(device)
 
-#             output = model(total_odf_mesh)
+            output = model(total_odf_mesh)
 
-#             # Move back to CPU
-#             pdf_mesh = pdf_mesh.cpu().numpy()
-#             total_odf_mesh = total_odf_mesh.cpu().numpy()
-#             output = output.cpu().numpy()
-    #         fixels = fixels.numpy()
+            # Move back to CPU
+            pdf_mesh = pdf_mesh.cpu().numpy()
+            total_odf_mesh = total_odf_mesh.cpu().numpy()
+            output = output.cpu().numpy().astype(np.float64)
+            fixels = fixels.numpy()
 
-    #         for i in range(len(pdf_mesh)):
-    #             single_pdf_mesh = pdf_mesh[i]
-    #             single_output = output[i]
-    #             theta, phi, vol = fixels[i].T
+            for i in range(len(pdf_mesh)):
+                single_pdf_mesh = pdf_mesh[i]
+                single_output = output[i]
+                theta, phi, vol = fixels[i].T
 
-    #             # Sort by vol and remove any with vol = 0
-    #             sort_idx = np.argsort(vol)[::-1]
-    #             sort_idx = sort_idx[vol[sort_idx] > 0]
-    #             theta = theta[sort_idx]
-    #             phi = phi[sort_idx]
-    #             vol = vol[sort_idx]
+                # Sort by vol and remove any with vol = 0
+                sort_idx = np.argsort(vol)[::-1]
+                sort_idx = sort_idx[vol[sort_idx] > 0]
+                theta = theta[sort_idx]
+                phi = phi[sort_idx]
+                vol = vol[sort_idx]
 
-    #             true_odf = np.array([convert_sh_descoteaux_tournier(gen_dirac(m_list, l_list, theta=t, phi=p))*v for t, p, v in zip(theta, phi, vol)])
-    #             est_odf, est_dirs, est_vol = pdf2odfs(single_output, sphere, amp_threshold=amp_threshold)
+                true_odf = np.array([convert_sh_descoteaux_tournier(gen_dirac(m_list, l_list, theta=t, phi=p))*v for t, p, v in zip(theta, phi, vol)])
+                est_odf, est_dirs, est_vol = pdf2odfs(single_output, sphere, use_dipy=True, amp_threshold=0.0, min_separation_angle=0.0)
 
-    #             # If all empty, just get a random dir and vol of 0
-    #             if est_odf.shape[0] == 0 and est_dirs.shape[0] == 0 and est_vol.shape[0] == 0:
-    #                 est_odf = np.zeros((1, 28))
-    #                 est_dirs = np.zeros((1, 2))
-    #                 est_vol = np.zeros(1)
-    #                 est_vol[0] = 1
+                # If all empty, just get a random dir and vol of 0
+                if est_odf.shape[0] == 0 and est_dirs.shape[0] == 0 and est_vol.shape[0] == 0:
+                    est_odf = np.zeros((1, 28))
+                    est_dirs = np.zeros((1, 2))
+                    est_vol = np.zeros(1)
+                    est_vol[0] = 1
 
-    #             # Sort by est_vol
-    #             sort_idx = np.argsort(est_vol)[::-1]
-    #             est_odf = est_odf[sort_idx]
-    #             est_dirs = est_dirs[sort_idx]
-    #             est_vol = est_vol[sort_idx]
+                # Sort by est_vol
+                sort_idx = np.argsort(est_vol)[::-1]
+                est_odf = est_odf[sort_idx]
+                est_dirs = est_dirs[sort_idx]
+                est_vol = est_vol[sort_idx]
 
-    #             est_theta, est_phi = est_dirs.T
+                est_theta, est_phi = est_dirs.T
 
-    #             # Match them
-    #             est_odf_matched, index_array = match_odfs(true_odf, est_odf)           
-    #             est_theta_matched = est_theta[index_array] 
-    #             est_phi_matched = est_phi[index_array] 
-    #             est_vol_matched = est_vol[index_array] 
+                # Match them
+                est_odf_matched, index_array = match_odfs(true_odf, est_odf)           
+                est_theta_matched = est_theta[index_array] 
+                est_phi_matched = est_phi[index_array] 
+                est_vol_matched = est_vol[index_array] 
 
-    #             est_n_fibers = len(est_odf_matched)
-    #             true_n_fibers = len(true_odf)
+                est_n_fibers = len(est_odf_matched)
+                true_n_fibers = len(true_odf)
 
-    #             # if idx == 0 and i < 3:
-    #             #     fig, ax = plt.subplots(1, 5, figsize=(10, 5), subplot_kw={"projection": "3d"})
-    #             #     plot_mesh(pdf_mesh[i], sphere, ax=ax[0], cmap="cmc.batlow", alpha=0.5)
-    #             #     plot_mesh(total_odf_mesh[i], sphere, ax=ax[1], cmap="cmc.batlow", alpha=0.5)
-    #             #     plot_mesh(output[i], sphere, ax=ax[2], cmap="cmc.batlow", alpha=0.5)
-    #             #     [plot_odf(odf, ax=ax[3], color="b", alpha=0.2) for odf in true_odf]
-    #             #     [plot_odf(odf, ax=ax[4], color="r", alpha=0.2) for odf in est_odf_matched]
+                # if idx == 0 and i < 3:
+                #     fig, ax = plt.subplots(1, 5, figsize=(10, 5), subplot_kw={"projection": "3d"})
+                #     plot_mesh(pdf_mesh[i], sphere, ax=ax[0], cmap="cmc.batlow", alpha=0.5)
+                #     plot_mesh(total_odf_mesh[i], sphere, ax=ax[1], cmap="cmc.batlow", alpha=0.5)
+                #     plot_mesh(output[i], sphere, ax=ax[2], cmap="cmc.batlow", alpha=0.5)
+                #     [plot_odf(odf, ax=ax[3], color="b", alpha=0.2) for odf in true_odf]
+                #     [plot_odf(odf, ax=ax[4], color="r", alpha=0.2) for odf in est_odf_matched]
 
-    #             #     x, y, z = sphere2cart(np.ones_like(theta), theta, phi)
-    #             #     for a in ax:
-    #             #         for i in range(len(x)):
-    #             #             a.plot([-x[i], x[i]], [-y[i], y[i]], [-z[i], z[i]], color="k", alpha=0.5)
-    #             #     print(f'{theta=}, {phi=}, {vol=}')
-    #             #     print(f'{est_theta=}, {est_phi=}, {est_vol=}')
-    #             #     print(f'{est_theta_matched=}, {est_phi_matched=}, {est_vol_matched=}')
+                #     x, y, z = sphere2cart(np.ones_like(theta), theta, phi)
+                #     for a in ax:
+                #         for i in range(len(x)):
+                #             a.plot([-x[i], x[i]], [-y[i], y[i]], [-z[i], z[i]], color="k", alpha=0.5)
+                #     print(f'{theta=}, {phi=}, {vol=}')
+                #     print(f'{est_theta=}, {est_phi=}, {est_vol=}')
+                #     print(f'{est_theta_matched=}, {est_phi_matched=}, {est_vol_matched=}')
 
-    #             #     plt.show()
+                #     plt.show()
 
-    #             # Calculate ACC for each fiber
-    #             for j, (odf1, odf2) in enumerate(zip(true_odf, est_odf_matched)):
-    #                 acc = angular_corr_coeff(odf1, odf2)
-    #                 test_results["voxel_index"].append(i+idx*512)
-    #                 test_results["fiber_index"].append(j)
-    #                 test_results["true_n_fibers"].append(true_n_fibers)
-    #                 test_results["est_n_fibers"].append(est_n_fibers)
-    #                 test_results["true_theta"].append(theta[j])
-    #                 test_results["true_phi"].append(phi[j])
-    #                 test_results["true_v"].append(vol[j])
-    #                 test_results["est_theta_matched"].append(est_theta_matched[j])
-    #                 test_results["est_phi_matched"].append(est_phi_matched[j])
-    #                 test_results["est_v_matched"].append(est_vol_matched[j])
-    #                 test_results["acc"].append(acc)
-    #                 # print(f"{i},{j},{acc=}")
+                # Calculate ACC for each fiber
+                for j, (odf1, odf2) in enumerate(zip(true_odf, est_odf_matched)):
+                    acc = angular_corr_coeff(odf1, odf2)
+                    test_results["voxel_index"].append(i+idx*512)
+                    test_results["fiber_index"].append(j)
+                    test_results["true_n_fibers"].append(true_n_fibers)
+                    test_results["est_n_fibers"].append(est_n_fibers)
+                    test_results["true_theta"].append(theta[j])
+                    test_results["true_phi"].append(phi[j])
+                    test_results["true_v"].append(vol[j])
+                    test_results["est_theta_matched"].append(est_theta_matched[j])
+                    test_results["est_phi_matched"].append(est_phi_matched[j])
+                    test_results["est_v_matched"].append(est_vol_matched[j])
+                    test_results["acc"].append(acc)
+                    # print(f"{i},{j},{acc=}")
 
-    #             # if est_n_fibers < true_n_fibers, add dummy rows
-    #             missing_fibers = true_n_fibers - est_n_fibers
-    #             if missing_fibers > 0:
-    #                 for j in range(est_n_fibers, true_n_fibers):
-    #                     test_results["voxel_index"].append(i+idx*512)
-    #                     test_results["fiber_index"].append(j)
-    #                     test_results["true_n_fibers"].append(true_n_fibers)
-    #                     test_results["est_n_fibers"].append(est_n_fibers)
-    #                     test_results["true_theta"].append(theta[j])
-    #                     test_results["true_phi"].append(phi[j])
-    #                     test_results["true_v"].append(vol[j])
-    #                     test_results["est_theta_matched"].append(np.nan)
-    #                     test_results["est_phi_matched"].append(np.nan)
-    #                     test_results["est_v_matched"].append(np.nan)
-    #                     test_results["acc"].append(0)
+                # if est_n_fibers < true_n_fibers, add dummy rows
+                missing_fibers = true_n_fibers - est_n_fibers
+                if missing_fibers > 0:
+                    for j in range(est_n_fibers, true_n_fibers):
+                        test_results["voxel_index"].append(i+idx*512)
+                        test_results["fiber_index"].append(j)
+                        test_results["true_n_fibers"].append(true_n_fibers)
+                        test_results["est_n_fibers"].append(est_n_fibers)
+                        test_results["true_theta"].append(theta[j])
+                        test_results["true_phi"].append(phi[j])
+                        test_results["true_v"].append(vol[j])
+                        test_results["est_theta_matched"].append(np.nan)
+                        test_results["est_phi_matched"].append(np.nan)
+                        test_results["est_v_matched"].append(np.nan)
+                        test_results["acc"].append(0)
 
-    # # Save to CSV
-    # test_results = pd.DataFrame(test_results)
-    # test_results.to_csv(output_dir / "test_results_angle.csv", index=False)
+    # Save to CSV
+    test_results = pd.DataFrame(test_results)
+    test_results.to_csv(output_dir / "test_results_angle.csv", index=False)
 
-    # test_results = {
-    #     "voxel_index": [],
-    #     "fiber_index": [],
-    #     "true_n_fibers": [],
-    #     "est_n_fibers": [],
-    #     "true_theta": [],
-    #     "true_phi": [],
-    #     "true_v": [],
-    #     "est_theta_matched": [],
-    #     "est_phi_matched": [],
-    #     "est_v_matched": [],
-    #     "acc": [],
-    # }
-    # with torch.no_grad():
+    test_results = {
+        "voxel_index": [],
+        "fiber_index": [],
+        "true_n_fibers": [],
+        "est_n_fibers": [],
+        "true_theta": [],
+        "true_phi": [],
+        "true_v": [],
+        "est_theta_matched": [],
+        "est_phi_matched": [],
+        "est_v_matched": [],
+        "acc": [],
+    }
+    with torch.no_grad():
         
-    #     for idx, test_data in enumerate(tqdm(sensitivity_vol_loader, desc='vol set')):
-    #         pdf_mesh, total_odf_mesh, fixels = test_data
-    #         pdf_mesh = pdf_mesh.to(device)
-    #         total_odf_mesh = total_odf_mesh.to(device)
+        for idx, test_data in enumerate(tqdm(sensitivity_vol_loader, desc='vol set')):
+            pdf_mesh, total_odf_mesh, fixels = test_data
+            pdf_mesh = pdf_mesh.to(device)
+            total_odf_mesh = total_odf_mesh.to(device)
 
-    #         output = model(total_odf_mesh)
+            output = model(total_odf_mesh)
 
-    #         # Move back to CPU
-    #         pdf_mesh = pdf_mesh.cpu().numpy()
-    #         output = output.cpu().numpy()
-    #         fixels = fixels.numpy()
+            # Move back to CPU
+            pdf_mesh = pdf_mesh.cpu().numpy()
+            output = output.cpu().numpy().astype(np.float64)
+            fixels = fixels.numpy()
 
-    #         for i in range(len(pdf_mesh)):
-    #             single_pdf_mesh = pdf_mesh[i]
-    #             single_output = output[i]
-    #             theta, phi, vol = fixels[i].T
+            for i in range(len(pdf_mesh)):
+                single_pdf_mesh = pdf_mesh[i]
+                single_output = output[i]
+                theta, phi, vol = fixels[i].T
 
-    #             # Sort by vol and remove any with vol = 0
-    #             sort_idx = np.argsort(vol)[::-1]
-    #             sort_idx = sort_idx[vol[sort_idx] > 0]
-    #             theta = theta[sort_idx]
-    #             phi = phi[sort_idx]
-    #             vol = vol[sort_idx]
+                # Sort by vol and remove any with vol = 0
+                sort_idx = np.argsort(vol)[::-1]
+                sort_idx = sort_idx[vol[sort_idx] > 0]
+                theta = theta[sort_idx]
+                phi = phi[sort_idx]
+                vol = vol[sort_idx]
 
-    #             true_odf = np.array([convert_sh_descoteaux_tournier(gen_dirac(m_list, l_list, theta=t, phi=p))*v for t, p, v in zip(theta, phi, vol)])
-    #             est_odf, est_dirs, est_vol = pdf2odfs(single_output, sphere, amp_threshold=amp_threshold)
+                true_odf = np.array([convert_sh_descoteaux_tournier(gen_dirac(m_list, l_list, theta=t, phi=p))*v for t, p, v in zip(theta, phi, vol)])
+                est_odf, est_dirs, est_vol = pdf2odfs(single_output, sphere, use_dipy=True, amp_threshold=0.0, min_separation_angle=0.0)
 
-    #             # If all empty, just get a random dir and vol of 0
-    #             if est_odf.shape[0] == 0 and est_dirs.shape[0] == 0 and est_vol.shape[0] == 0:
-    #                 est_odf = np.zeros((1, 28))
-    #                 est_dirs = np.zeros((1, 2))
-    #                 est_vol = np.zeros(1)
-    #                 est_vol[0] = 1
+                # If all empty, just get a random dir and vol of 0
+                if est_odf.shape[0] == 0 and est_dirs.shape[0] == 0 and est_vol.shape[0] == 0:
+                    est_odf = np.zeros((1, 28))
+                    est_dirs = np.zeros((1, 2))
+                    est_vol = np.zeros(1)
+                    est_vol[0] = 1
 
-    #             est_theta, est_phi = est_dirs.T
+                est_theta, est_phi = est_dirs.T
 
 
-    #             # Match them
-    #             est_odf_matched, index_array = match_odfs(true_odf, est_odf)
-    #             est_theta_matched = est_theta[index_array]
-    #             est_phi_matched = est_phi[index_array]
-    #             est_vol_matched = est_vol[index_array]
+                # Match them
+                est_odf_matched, index_array = match_odfs(true_odf, est_odf)
+                est_theta_matched = est_theta[index_array]
+                est_phi_matched = est_phi[index_array]
+                est_vol_matched = est_vol[index_array]
 
-    #             est_n_fibers = len(est_odf_matched)
-    #             true_n_fibers = len(true_odf)
+                est_n_fibers = len(est_odf_matched)
+                true_n_fibers = len(true_odf)
 
-    #             # Calculate ACC for each fiber
-    #             for j, (odf1, odf2) in enumerate(zip(true_odf, est_odf_matched)):
-    #                 acc = angular_corr_coeff(odf1, odf2)
-    #                 test_results["voxel_index"].append(i+idx*512)
-    #                 test_results["fiber_index"].append(j)
-    #                 test_results["true_n_fibers"].append(true_n_fibers)
-    #                 test_results["est_n_fibers"].append(est_n_fibers)
-    #                 test_results["true_theta"].append(theta[j])
-    #                 test_results["true_phi"].append(phi[j])
-    #                 test_results["true_v"].append(vol[j])
-    #                 test_results["est_theta_matched"].append(est_theta_matched[j])
-    #                 test_results["est_phi_matched"].append(est_phi_matched[j])
-    #                 test_results["est_v_matched"].append(est_vol_matched[j])
-    #                 test_results["acc"].append(acc)
+                # Calculate ACC for each fiber
+                for j, (odf1, odf2) in enumerate(zip(true_odf, est_odf_matched)):
+                    acc = angular_corr_coeff(odf1, odf2)
+                    test_results["voxel_index"].append(i+idx*512)
+                    test_results["fiber_index"].append(j)
+                    test_results["true_n_fibers"].append(true_n_fibers)
+                    test_results["est_n_fibers"].append(est_n_fibers)
+                    test_results["true_theta"].append(theta[j])
+                    test_results["true_phi"].append(phi[j])
+                    test_results["true_v"].append(vol[j])
+                    test_results["est_theta_matched"].append(est_theta_matched[j])
+                    test_results["est_phi_matched"].append(est_phi_matched[j])
+                    test_results["est_v_matched"].append(est_vol_matched[j])
+                    test_results["acc"].append(acc)
 
-    #             # if est_n_fibers < true_n_fibers, add dummy rows
-    #             missing_fibers = true_n_fibers - est_n_fibers
-    #             if missing_fibers > 0:
-    #                 for j in range(est_n_fibers, true_n_fibers):
-    #                     test_results["voxel_index"].append(i+idx*512)
-    #                     test_results["fiber_index"].append(j)
-    #                     test_results["true_n_fibers"].append(true_n_fibers)
-    #                     test_results["est_n_fibers"].append(est_n_fibers)
-    #                     test_results["true_theta"].append(theta[j])
-    #                     test_results["true_phi"].append(phi[j])
-    #                     test_results["true_v"].append(vol[j])
-    #                     test_results["est_theta_matched"].append(np.nan)
-    #                     test_results["est_phi_matched"].append(np.nan)
-    #                     test_results["est_v_matched"].append(np.nan)
-    #                     test_results["acc"].append(0)
+                # if est_n_fibers < true_n_fibers, add dummy rows
+                missing_fibers = true_n_fibers - est_n_fibers
+                if missing_fibers > 0:
+                    for j in range(est_n_fibers, true_n_fibers):
+                        test_results["voxel_index"].append(i+idx*512)
+                        test_results["fiber_index"].append(j)
+                        test_results["true_n_fibers"].append(true_n_fibers)
+                        test_results["est_n_fibers"].append(est_n_fibers)
+                        test_results["true_theta"].append(theta[j])
+                        test_results["true_phi"].append(phi[j])
+                        test_results["true_v"].append(vol[j])
+                        test_results["est_theta_matched"].append(np.nan)
+                        test_results["est_phi_matched"].append(np.nan)
+                        test_results["est_v_matched"].append(np.nan)
+                        test_results["acc"].append(0)
 
-    # # Save to CSV
-    # test_results = pd.DataFrame(test_results)
-    # test_results.to_csv(output_dir / "test_results_vol.csv", index=False)
+    # Save to CSV
+    test_results = pd.DataFrame(test_results)
+    test_results.to_csv(output_dir / "test_results_vol.csv", index=False)
 
 # Combine them all into one
 df_list = []

@@ -205,6 +205,7 @@ def test_mesh_model(
     test_dir="./test_data",
     gpu_id=0,
     healpix=False,
+    **kwargs # For pdf2odfs function
 ):
     # Load data
     test_dataset = GeneratedMeshDataset(n_fibers=n_fibers, directory=test_dir, return_fixels=True, subdivide=subdivide_mesh, kappa=kappa, healpix=healpix)
@@ -255,7 +256,7 @@ def test_mesh_model(
 
             # Move back to CPU
             pdf_mesh = pdf_mesh.cpu().numpy()
-            output = output.cpu().numpy()
+            output = output.cpu().numpy().astype(np.float64)
             fixels = fixels.numpy()
 
             for i in range(len(pdf_mesh)):
@@ -271,7 +272,7 @@ def test_mesh_model(
                 vol = vol[sort_idx]
 
                 true_odf = np.array([convert_sh_descoteaux_tournier(gen_dirac(m_list, l_list, theta=t, phi=p))*v for t, p, v in zip(theta, phi, vol)])
-                est_odf, est_dirs, est_vol = pdf2odfs(single_output, sphere, amp_threshold=amp_threshold)
+                est_odf, est_dirs, est_vol = pdf2odfs(single_output, sphere, amp_threshold=amp_threshold, **kwargs)
 
                 # Match them
                 est_odf_matched, index_array = match_odfs(true_odf, est_odf)
