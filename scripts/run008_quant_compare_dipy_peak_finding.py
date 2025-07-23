@@ -21,73 +21,73 @@ test_dir = "../test_data"
 
 name = "deepfixel_mesh_scnn_healpix_2025-04-14_12-21-03"
 
-output_dir_orig = f'../outputs/peak_finding_orig'
+output_dir_orig = '/home/local/VANDERBILT/saundam1/Documents/spherical_deep_fixel/outputs/peak_finding_orig'
 amp_threshold = 0.1
 model_path = f"../models/{name}/best_model.pth"
 
-start_time = time.time()
+# start_time = time.time()
 
-deep_fixel.test_mesh_model(
-    model=model,
-    model_path=model_path,
-    batch_size=batch_size,
-    n_fibers=n_fibers,
-    subdivide_mesh=mesh_subdivide,
-    amp_threshold=amp_threshold,
-    output_dir=output_dir_orig,
-    kappa=kappa,
-    test_dir=test_dir,
-    gpu_id=gpu_id,
-    healpix=healpix,
-    use_dipy=False
-)
+# deep_fixel.test_mesh_model(
+#     model=model,
+#     model_path=model_path,
+#     batch_size=batch_size,
+#     n_fibers=n_fibers,
+#     subdivide_mesh=mesh_subdivide,
+#     amp_threshold=amp_threshold,
+#     output_dir=output_dir_orig,
+#     kappa=kappa,
+#     test_dir=test_dir,
+#     gpu_id=gpu_id,
+#     healpix=healpix,
+#     use_dipy=False
+# )
 
-orig_time = time.time() - start_time
+# orig_time = time.time() - start_time
 
-output_dir_dipy = f'../outputs/peak_finding_dipy'
+output_dir_dipy = '/home/local/VANDERBILT/saundam1/Documents/spherical_deep_fixel/outputs/peak_finding_dipy'
 
-start_time = time.time()
+# start_time = time.time()
 
-deep_fixel.test_mesh_model(
-    model=model,
-    model_path=model_path,
-    batch_size=batch_size,
-    n_fibers=n_fibers,
-    subdivide_mesh=mesh_subdivide,
-    amp_threshold=0,
-    output_dir=output_dir_dipy,
-    kappa=kappa,
-    test_dir=test_dir,
-    gpu_id=gpu_id,
-    healpix=healpix,
-    use_dipy=True,
-    min_separation_angle=0,
-    is_symmetric=True
-)
+# deep_fixel.test_mesh_model(
+#     model=model,
+#     model_path=model_path,
+#     batch_size=batch_size,
+#     n_fibers=n_fibers,
+#     subdivide_mesh=mesh_subdivide,
+#     amp_threshold=0,
+#     output_dir=output_dir_dipy,
+#     kappa=kappa,
+#     test_dir=test_dir,
+#     gpu_id=gpu_id,
+#     healpix=healpix,
+#     use_dipy=True,
+#     min_separation_angle=0,
+#     is_symmetric=True
+# )
 
-dipy_time = time.time() - start_time
+# dipy_time = time.time() - start_time
 
-output_dir_dipy = f'../outputs/peak_finding_dipy_nl'
+output_dir_dipy = '/home/local/VANDERBILT/saundam1/Documents/spherical_deep_fixel/outputs/peak_finding_dipy_nl'
 
-start_time = time.time()
+# start_time = time.time()
 
-deep_fixel.test_mesh_model(
-    model=model,
-    model_path=model_path,
-    batch_size=batch_size,
-    n_fibers=n_fibers,
-    subdivide_mesh=mesh_subdivide,
-    amp_threshold=0,
-    output_dir=output_dir_dipy,
-    kappa=kappa,
-    test_dir=test_dir,
-    gpu_id=gpu_id,
-    healpix=healpix,
-    use_dipy="nl",
-    min_separation_angle=0,
-)
+# deep_fixel.test_mesh_model(
+#     model=model,
+#     model_path=model_path,
+#     batch_size=batch_size,
+#     n_fibers=n_fibers,
+#     subdivide_mesh=mesh_subdivide,
+#     amp_threshold=0,
+#     output_dir=output_dir_dipy,
+#     kappa=kappa,
+#     test_dir=test_dir,
+#     gpu_id=gpu_id,
+#     healpix=healpix,
+#     use_dipy="nl",
+#     min_separation_angle=0,
+# )
 
-dipy_nl_time = time.time() - start_time
+# dipy_nl_time = time.time() - start_time
 
 # Load results
 orig_results = pd.read_csv(f"{output_dir_orig}/test_results.csv")
@@ -114,11 +114,17 @@ annotator = Annotator(ax, pairs, data=combined_results, x='peak_finding_method',
 annotator.configure(test='Wilcoxon', text_format='star', loc='inside', verbose=2)
 annotator.apply_and_annotate()
 
+# Print difference between dipy and dipy_nl
+dipy_acc = combined_results[combined_results['peak_finding_method'] == 'dipy']['acc'].values
+dipy_nl_acc = combined_results[combined_results['peak_finding_method'] == 'dipy_nl']['acc'].values
+print("Difference in ACC between Dipy and Dipy NL:")
+print(dipy_nl_acc - dipy_acc)
+
 # Print median and IQR
 print(combined_results.groupby('peak_finding_method')['acc'].aggregate(['median', lambda x: x.quantile(0.75) - x.quantile(0.25)]))
 
-print(f"Original peak finding time: {orig_time:.2f} seconds")
-print(f"Dipy peak finding time: {dipy_time:.2f} seconds")
-print(f"Dipy NL peak finding time: {dipy_nl_time:.2f} seconds")
+# print(f"Original peak finding time: {orig_time:.2f} seconds")
+# print(f"Dipy peak finding time: {dipy_time:.2f} seconds")
+# print(f"Dipy NL peak finding time: {dipy_nl_time:.2f} seconds")
 
 plt.show()

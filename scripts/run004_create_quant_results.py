@@ -35,7 +35,7 @@ for lh in legend.legend_handles:
 # Add Wilcoxon test between pairs
 pairs = [("DeepFixel MLP", "fod2fixel"), ("DeepFixel Spherical CNN", "fod2fixel"), ("DeepFixel MLP", "DeepFixel Spherical CNN")]
 annotator = Annotator(ax, pairs, data=total_results, x="experiment", y="acc")
-annotator.configure(test="Mann-Whitney", text_format="star", loc="inside", verbose=2)
+annotator.configure(test="Wilcoxon", text_format="star", loc="inside", verbose=2)
 annotator.apply_and_annotate()
 
 # Rename x-axis labels
@@ -80,6 +80,12 @@ legend = ax.get_legend()
 for lh in legend.legend_handles:
     lh.set_alpha(1)
 
+# Add Wilcoxon test between pairs
+pairs = [("DeepFixel MLP", "fod2fixel"), ("DeepFixel Spherical CNN", "fod2fixel"), ("DeepFixel MLP", "DeepFixel Spherical CNN"), ("FISSILE", "fod2fixel"), ("FISSILE", "DeepFixel MLP"), ("FISSILE", "DeepFixel Spherical CNN")]
+annotator = Annotator(ax, pairs, data=total_results, x="experiment", y="angular_error")
+annotator.configure(test="Mann-Whitney", text_format="star", loc="inside", verbose=2)
+annotator.apply_and_annotate()
+
 fig, ax = plt.subplots(figsize=(6.5, 4))
 sns.boxplot(x="experiment", y="volume_fraction_error", data=total_results, showfliers=False, ax=ax, color="white", linewidth=1.5, order=["FISSILE", "fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"])
 sns.stripplot(x="experiment", y="volume_fraction_error", hue="true_n_fibers", data=total_results, jitter=0.2, alpha=0.3, ax=ax, palette="colorblind", order=["FISSILE", "fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"])
@@ -89,5 +95,10 @@ ax.legend(title="Number of fibers", loc='upper left')
 legend = ax.get_legend()
 for lh in legend.legend_handles:
     lh.set_alpha(1)
+
+pairs = [("DeepFixel MLP", "fod2fixel"), ("DeepFixel Spherical CNN", "fod2fixel"), ("DeepFixel MLP", "DeepFixel Spherical CNN"), ("FISSILE", "fod2fixel"), ("FISSILE", "DeepFixel MLP"), ("FISSILE", "DeepFixel Spherical CNN")]
+annotator = Annotator(ax, pairs, data=total_results, x="experiment", y="volume_fraction_error")
+annotator.configure(test="Mann-Whitney", text_format="star", loc="inside", verbose=2)
+annotator.apply_and_annotate()
 
 plt.show()
