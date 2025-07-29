@@ -167,8 +167,9 @@ cython_debug/
 
 **/pics/
 **/wandb/
-**/data/
-**/local/
-**/models/
-**/test_data/
-**/outputs/
+data/
+local/
+models/
+test_data/
+outputs/
+scripts/
