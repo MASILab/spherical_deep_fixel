@@ -88,7 +88,7 @@ print(pdf_mesh.shape, total_odf_mesh.shape, mlp_output.shape, fixels.shape, fiss
 m_list, l_list = sph_harm_ind_list(6)
 
 # Plot
-fig, ax = plt.subplots(3, 6, figsize=(6.5,4.5), subplot_kw={"projection": "3d"})
+fig, ax = plt.subplots(3, 6, figsize=(6.8,5), subplot_kw={"projection": "3d"}, layout='constrained')
 for i, voxel_idx in enumerate([high_voxel_index, mid_voxel_index, low_voxel_index]):
     fixel_to_plot = fixels[voxel_idx]
     fissile_odf= fissile_outputs[voxel_idx]
@@ -176,10 +176,10 @@ for i, voxel_idx in enumerate([high_voxel_index, mid_voxel_index, low_voxel_inde
 
 ax[0,0].set_title("Multi-fiber\nODF")
 ax[0,1].set_title("Single-fiber\nODFs")
-ax[0,2].set_title("Estimated\nODFs\n(FISSILE)")
+ax[0,2].set_title("Estimated\nODFs\n(FISSILE, ours)")
 ax[0,3].set_title("Estimated\nODFs\n(fod2fixel)")
-ax[0,4].set_title("Estimated\nODFs\n(DeepFixel\nMLP)")
-ax[0,5].set_title("Estimated\nODFs\n(DeepFixel\nSpherical CNN)")
+ax[0,4].set_title("Estimated\nODFs\n(DeepFixel\nMLP, ours)")
+ax[0,5].set_title("Estimated\nODFs\n(DeepFixel\nSpherical\nCNN, ours)")
 
 for a in ax.flatten():
     a.tick_params(axis='both', which='major', pad=-2)
@@ -195,5 +195,6 @@ for a in ax.flatten():
 # plt.tight_layout()
 save_dir = Path("/home/local/VANDERBILT/saundam1/Pictures/deepfixel/spie_2025")
 save_dir.mkdir(parents=True, exist_ok=True)
+# plt.tight_layout()
 plt.savefig(save_dir / "fig_qual_results.png", dpi=600)
 plt.show()

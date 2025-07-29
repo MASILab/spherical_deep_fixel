@@ -39,11 +39,11 @@ for lh in legend.legend_handles:
 # Add Wilcoxon test between pairs
 pairs = [("DeepFixel MLP", "fod2fixel"), ("DeepFixel Spherical CNN", "fod2fixel"), ("DeepFixel MLP", "DeepFixel Spherical CNN")]
 annotator = Annotator(ax[0], pairs, data=total_results, x="experiment", y="acc")
-annotator.configure(test="Mann-Whitney", text_format="star", loc="inside", verbose=2)
+annotator.configure(test="Wilcoxon", text_format="star", loc="inside", verbose=2)
 annotator.apply_and_annotate()
 
 # Rename x-axis labels
-ax[0].set_xticklabels(["FISSILE", "fod2fixel", "DeepFixel\nMLP", "DeepFixel\nSpherical\nCNN"])
+ax[0].set_xticklabels(["FISSILE\n(ours)", "fod2fixel", "DeepFixel\nMLP (ours)", "DeepFixel\nSpherical\nCNN (ours)"])
 
 # Also get median and IQR
 print("Total results median and IQR")
@@ -59,8 +59,9 @@ ax[1].yaxis.get_major_formatter().set_scientific(False)
 
 # Put legend in lower right
 legend = ax[1].get_legend()
+handles, labels = ax[1].get_legend_handles_labels()
 legend.remove()
-ax[1].legend(title="Method", loc='lower right')
+ax[1].legend(handles, ["FISSILE (ours)", "fod2fixel", "DeepFixel\nMLP (ours)", "DeepFixel\nSpherical\nCNN (ours)"], title="Method", loc='lower right', framealpha=0.33)
 
 sns.lineplot(x="true_angular_separation", y="acc", hue="method", hue_order=["FISSILE", "fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"], data=sensitivity_results[sensitivity_results["experiment"] == "angle"], estimator="median", errorbar=("pi", 50), err_style="band", ax=ax[2], markeredgecolor=None, marker='.', markersize=4)
 ax[2].set_yscale('log')
@@ -71,13 +72,14 @@ ax[2].yaxis.get_major_formatter().set_scientific(False)
 
 # Put legend in lower right
 legend = ax[2].get_legend()
+handles, labels = ax[2].get_legend_handles_labels()
 legend.remove()
-ax[2].legend(title="Method", loc='lower right')
+ax[2].legend(handles, ["FISSILE (ours)", "fod2fixel", "DeepFixel\nMLP (ours)", "DeepFixel\nSpherical\nCNN (ours)"], title="Method", loc='lower right', framealpha=0.33)
 
 # # Save tidy results
 # total_results.to_csv("total_results.csv", index=False)
 # sensitivity_results.to_csv("sensitivity_results.csv", index=False)
 
 plt.tight_layout()
-
+fig.savefig("/home/local/VANDERBILT/saundam1/Pictures/deepfixel/spie_2025/fig_quant_results_small.png", dpi=600)
 plt.show()

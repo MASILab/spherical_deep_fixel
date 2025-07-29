@@ -30,8 +30,9 @@ ax[0].yaxis.get_major_formatter().set_scientific(False)
 
 # Put legend in lower right
 legend = ax[0].get_legend()
+handles, labels = ax[0].get_legend_handles_labels()
 legend.remove()
-ax[0].legend(title="Method", loc='lower right')
+ax[0].legend(handles, ["FISSILE (ours)", "fod2fixel", "DeepFixel MLP (ours)", "DeepFixel Spherical CNN (ours)"], title="Method", loc='lower right')
 
 sns.lineplot(x="true_angular_separation", y="acc", hue="method", hue_order=["FISSILE", "fod2fixel", "DeepFixel MLP", "DeepFixel Spherical CNN"], data=sensitivity_results[sensitivity_results["experiment"] == "angle"], estimator="median", errorbar=("pi", 50), err_style="band", ax=ax[1], markeredgecolor=None, marker='.', markersize=4)
 ax[1].set_yscale('log')
@@ -42,8 +43,9 @@ ax[1].yaxis.get_major_formatter().set_scientific(False)
 
 # Put legend in lower right
 legend = ax[1].get_legend()
+handles, labels = ax[1].get_legend_handles_labels()
 legend.remove()
-ax[1].legend(title="Method", loc='lower right')
+ax[1].legend(handles, ["FISSILE (ours)", "fod2fixel", "DeepFixel MLP (ours)", "DeepFixel Spherical CNN (ours)"], title="Method", loc='lower right')
 
 # # Save tidy results
 # total_results.to_csv("total_results.csv", index=False)

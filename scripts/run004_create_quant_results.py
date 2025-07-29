@@ -39,7 +39,7 @@ annotator.configure(test="Wilcoxon", text_format="star", loc="inside", verbose=2
 annotator.apply_and_annotate()
 
 # Rename x-axis labels
-ax.set_xticklabels(["FISSILE", "fod2fixel", "DeepFixel\nMLP", "DeepFixel\nSpherical\nCNN"])
+ax.set_xticklabels(["FISSILE (ours)", "fod2fixel", "DeepFixel\nMLP (ours)", "DeepFixel\nSpherical\nCNN (ours)"])
 
 # Also get median and IQR
 print("Total results median and IQR")
