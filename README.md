@@ -7,7 +7,7 @@ You can set up an environment using [`uv`](https://github.com/astral-sh/uv) by r
 uv sync
 ```
 
-To run the model, download the weights and testing dataset from the following link: [DeepFixel](https://zenodo.org/records/14962758).
+To run the model, download the weights and testing dataset from the following link: [https://zenodo.org/records/16587458](https://zenodo.org/records/16587458).
 
 - Unzip and copy the testing data to `./test_data`
 - Put the weights in `./models/pretrained`

@@ -13,6 +13,7 @@ mesh_subdivide = 1
 kappa = 100
 n_fibers = 'both'
 healpix = True
+min_separation_angle = 0
 save_dir = "./models"
 test_dir = "./test_data"
 
@@ -52,4 +53,7 @@ deep_fixel.test_mesh_model(
     test_dir=test_dir,
     gpu_id=gpu_id,
     healpix=healpix,
+    use_dipy=True,
+    min_separation_angle=min_separation_angle,
+    is_symmetric=True
 )
