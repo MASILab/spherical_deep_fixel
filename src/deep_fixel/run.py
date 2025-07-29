@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 import wandb
 from .dataset import RandomMeshDataset, GeneratedMeshDataset
-from .models import CrossingFiberMeshMLP
+from .models import CrossingFiberMeshMLP, CrossingFiberMeshSCNN
 from .utils import plot_odf, plot_mesh, pdf2odfs, match_odfs, angular_corr_coeff
 from pathlib import Path
 import matplotlib.pyplot as plt
@@ -25,6 +25,9 @@ def train_mesh_model(
     mesh_subdivide=3,
     kappa=100,
     save_dir="./models",
+    healpix=False,
+    csd=False,
+    snr=None
 ):
     if seed is not None:
         torch.manual_seed(seed)
@@ -44,7 +47,11 @@ def train_mesh_model(
         "loss": loss_name,
         "seed": seed,
         "mesh_subdivide": mesh_subdivide,
-        "kappa": kappa
+        "kappa": kappa,
+        "model": model,
+        "healpix": healpix,
+        "csd": csd,
+        "snr": snr,
     }
 
     # Set up Weights and Biases
@@ -52,9 +59,9 @@ def train_mesh_model(
     run = wandb.init(project="deepfixel", name=run_name, config=config)
 
     # Set up datasets
-    train_dataset = RandomMeshDataset(n_fibers=n_fibers, l_max=6, seed=seed, subdivide=mesh_subdivide, kappa=kappa)
+    train_dataset = RandomMeshDataset(n_fibers=n_fibers, l_max=6, seed=seed, subdivide=mesh_subdivide, kappa=kappa, healpix=healpix, csd=csd, snr=snr)
     val_dataset = RandomMeshDataset(
-        n_fibers=n_fibers, l_max=6, seed=seed + 1, size=1000, deterministic=True, subdivide=mesh_subdivide, kappa=kappa
+        n_fibers=n_fibers, l_max=6, seed=seed + 1, size=1000, deterministic=True, subdivide=mesh_subdivide, kappa=kappa, healpix=healpix, csd=csd, snr=snr
     )
 
     # Set up dataloaders
@@ -69,6 +76,9 @@ def train_mesh_model(
     # Set up model
     if model == "mesh_mlp":
         model = CrossingFiberMeshMLP(n_mesh=n_mesh, device=device, sphere=sphere)
+    elif model == 'mesh_scnn':
+        model = CrossingFiberMeshSCNN(device=device, n_side=8, depth=5, patch_size=1, sh_degree=6, pooling_mode='average', pooling_name='spherical', use_hemisphere=True,
+            in_channels=1, out_channels=1, filter_start=2, block_depth=1, in_depth=1, kernel_sizeSph=3, kernel_sizeSpa=3, isoSpa=True, keepSphericalDim = True)
     else:
         raise ValueError(f"Model {model} not recognized")
 
@@ -184,6 +194,7 @@ def train_mesh_model(
             break
 
 def test_mesh_model(
+    model,
     model_path,
     n_fibers,
     subdivide_mesh,
@@ -193,9 +204,11 @@ def test_mesh_model(
     batch_size=512,
     test_dir="./test_data",
     gpu_id=0,
+    healpix=False,
+    **kwargs # For pdf2odfs function
 ):
     # Load data
-    test_dataset = GeneratedMeshDataset(n_fibers=n_fibers, directory=test_dir, return_fixels=True, subdivide=subdivide_mesh, kappa=kappa)
+    test_dataset = GeneratedMeshDataset(n_fibers=n_fibers, directory=test_dir, return_fixels=True, subdivide=subdivide_mesh, kappa=kappa, healpix=healpix)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     n_mesh = test_dataset.n_mesh
@@ -203,8 +216,15 @@ def test_mesh_model(
     device = torch.device(f"cuda:{gpu_id}" if torch.cuda.is_available() else "cpu")
 
     # Load the model
-    model = CrossingFiberMeshMLP(n_mesh=n_mesh)
-    model.load_state_dict(torch.load(model_path, weights_only=True, map_location=device))
+    strict = False if model == "mesh_scnn" else True
+    if model == "mesh_mlp":
+        model = CrossingFiberMeshMLP(n_mesh=n_mesh, device=device, sphere=sphere)
+    elif model == 'mesh_scnn':
+        model = CrossingFiberMeshSCNN(device=device, n_side=8, depth=5, patch_size=1, sh_degree=6, pooling_mode='average', pooling_name='spherical', use_hemisphere=True,
+            in_channels=1, out_channels=1, filter_start=2, block_depth=1, in_depth=1, kernel_sizeSph=3, kernel_sizeSpa=3, isoSpa=True, keepSphericalDim = True)
+    else:
+        raise ValueError(f"Model {model} not recognized")
+    model.load_state_dict(torch.load(model_path, map_location=device), strict=strict)
     model.to(device)
 
     m_list, l_list = sph_harm_ind_list(6)
@@ -236,7 +256,7 @@ def test_mesh_model(
 
             # Move back to CPU
             pdf_mesh = pdf_mesh.cpu().numpy()
-            output = output.cpu().numpy()
+            output = output.cpu().numpy().astype(np.float64)
             fixels = fixels.numpy()
 
             for i in range(len(pdf_mesh)):
@@ -252,8 +272,7 @@ def test_mesh_model(
                 vol = vol[sort_idx]
 
                 true_odf = np.array([convert_sh_descoteaux_tournier(gen_dirac(m_list, l_list, theta=t, phi=p))*v for t, p, v in zip(theta, phi, vol)])
-                est_odf, est_dirs, est_vol = pdf2odfs(single_output, sphere, amp_threshold=amp_threshold)
-
+                est_odf, est_dirs, est_vol = pdf2odfs(single_output, sphere, amp_threshold=amp_threshold, **kwargs)
 
                 # Match them
                 est_odf_matched, index_array = match_odfs(true_odf, est_odf)

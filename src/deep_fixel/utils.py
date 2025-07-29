@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from dipy.core.geometry import cart2sphere
 from dipy.core.sphere import unit_icosahedron
+from dipy.direction import peak_directions, peak_directions_nl
 from dipy.reconst.shm import (
     convert_sh_descoteaux_tournier,
     convert_sh_to_full_basis,
@@ -20,8 +21,9 @@ from scipy.signal import argrelmax
 from scipy.spatial.transform import Rotation as R
 from scipy.io import loadmat
 import cmcrameri 
+from line_profiler import profile
 
-def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.1):
+def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.1, sphere=None):
     """Plot a spherical orientation distribution function represented by spherical harmonic coefficients.
 
     Parameters
@@ -38,6 +40,8 @@ def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.
         Opacity, by default 1
     linewidth : float, optional
         Linewidth for the ODF, by default 0.1
+    sphere : Dipy Sphere, optional
+        Sphere to plot the ODF on. If provided, ODF is amplitudes, not spherical harmonic coefficients.
 
     Returns
     -------
@@ -48,16 +52,20 @@ def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.
         odf = odf[:, None]
     if ax is None:
         fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
-    sphere = unit_icosahedron.subdivide(n=4)
-    x, y, z = sphere.vertices.T
-    _, theta, phi = cart2sphere(x, y, z)
-    l_max = order_from_ncoef(odf.shape[0])
-    if basis == "tournier":
-        B = real_sh_tournier(sh_order_max=l_max, theta=theta, phi=phi)[0]
+
+    if sphere is not None:
+        odf_verts = sphere.vertices * odf
     else:
-        B = real_sh_descoteaux(sh_order_max=l_max, theta=theta, phi=phi)[0]
-    odf_amp = B @ odf
-    odf_verts = sphere.vertices * odf_amp
+        sphere = unit_icosahedron.subdivide(n=4)
+        x, y, z = sphere.vertices.T
+        _, theta, phi = cart2sphere(x, y, z)
+        l_max = order_from_ncoef(odf.shape[0])
+        if basis == "tournier":
+            B = real_sh_tournier(sh_order_max=l_max, theta=theta, phi=phi)[0]
+        else:
+            B = real_sh_descoteaux(sh_order_max=l_max, theta=theta, phi=phi)[0]
+        odf_amp = B @ odf
+        odf_verts = sphere.vertices * odf_amp
     ax.plot_trisurf(
         odf_verts[:, 0],
         odf_verts[:, 1],
@@ -405,8 +413,7 @@ def match_odfs(true_odfs, est_odfs):
 
     return matched_est_odfs, index_array
 
-
-def pdf2odfs(mesh, sphere, amp_threshold=0.5):
+def pdf2odfs(mesh, sphere, amp_threshold=0.5, use_dipy=False, **kwargs):
     """
     Estimate ODFs from spherical PDF
 
@@ -418,6 +425,10 @@ def pdf2odfs(mesh, sphere, amp_threshold=0.5):
         Sphere mesh.
     amp_threshold : float, optional
         Amplitude threshold for maxima, by default 0.5
+    use_dipy : bool, optional
+        Whether to use Dipy's peak finding, by default True.
+    **kwargs : dict, optional
+        Additional keyword arguments for peak finding if using Dipy.
 
     Returns
     -------
@@ -428,63 +439,112 @@ def pdf2odfs(mesh, sphere, amp_threshold=0.5):
     vol_fracs : NumPy array
         Estimated volume fractions
     """
-
-    theta = np.linspace(0, np.pi, 1000)
-    phi = np.linspace(0, 2 * np.pi, 1000)
-    theta_grid, phi_grid = np.meshgrid(theta, phi)
-    points = np.array([sphere.theta, sphere.phi]).T
-    pdf_mesh_interp = CloughTocher2DInterpolator(points, mesh, fill_value=0)
-    rel_maxima = argrelmax(mesh, axis=0)
-
-    # Get top 10 as initial points
-    top_argmax = np.argsort(mesh[rel_maxima])[-10:]
-    top_verts = sphere.vertices[rel_maxima[0][top_argmax]]
-    top_theta, top_phi = (
-        sphere.theta[rel_maxima[0][top_argmax]],
-        sphere.phi[rel_maxima[0][top_argmax]],
-    )
-
-    # Minimize this
-    initial_guesses = np.array([top_theta, top_phi]).T
-    minima = []
-    for initial_guess in initial_guesses:
-        res = minimize(lambda x: -1 * pdf_mesh_interp(x), initial_guess)
-        minima.append(res.x)
-
-    # Get unique values and round to 4 decimals
-    minima = np.array(minima)
-
-    # Get values at minima
-    minima_vals = pdf_mesh_interp(minima)
-    minima_vals = minima_vals
-
-    # Get round to 4 decimals and remove repeats for both
-    minima = np.round(minima, 4)
-    minima = np.unique(minima, axis=0)
-    minima_vals = pdf_mesh_interp(minima)
-
-    # Keep only minima > 0.1
-    minima = minima[minima_vals > amp_threshold]
-    minima_vals = minima_vals[minima_vals > amp_threshold]
-
-    # Estimate volume fraction using ratio of amplitude at minima
-    minima_vals = minima_vals / np.sum(minima_vals)
-
-    # Now estimate ODF at these points with these volume fractions
-    m_list, l_list = sph_harm_ind_list(6)
-    odfs = []
-    for min, min_val in zip(minima, minima_vals):
-        odfs.append(
-            convert_sh_descoteaux_tournier(
-                gen_dirac(m_list, l_list, theta=min[0], phi=min[1])
-            )
-            * min_val
+    if use_dipy == "nl":
+        points = np.array([sphere.theta, sphere.phi]).T
+        pdf_mesh_interp = CloughTocher2DInterpolator(points, mesh, fill_value=0)
+        pdf_mesh_interp_sphere = lambda sphere: pdf_mesh_interp(
+            np.array([sphere.theta, sphere.phi]).T
         )
-    odfs = np.array(odfs)
+        xyz, vals = peak_directions_nl(
+            pdf_mesh_interp_sphere,
+            relative_peak_threshold=amp_threshold,
+            sphere=sphere,
+            **kwargs
+        )
+        vol_fracs = vals / np.sum(vals)  # Normalize volume fractions
+        r, theta, phi = cart2sphere(xyz[:, 0], xyz[:, 1], xyz[:, 2])
+        dirs = np.array([theta, phi]).T
+        odfs = []
+        m_list, l_list = sph_harm_ind_list(6)
+        for theta, phi, vol_frac in zip(dirs[:, 0], dirs[:, 1], vol_fracs):
+            odfs.append(
+                convert_sh_descoteaux_tournier(
+                    gen_dirac(m_list, l_list, theta=theta, phi=phi)
+                )
+                * vol_frac
+            )
+        odfs = np.array(odfs)
+        return odfs, dirs, vol_fracs
+    elif use_dipy:
+        xyz, vals, _ = peak_directions(
+            mesh,
+            sphere,
+            relative_peak_threshold=amp_threshold,
+            **kwargs,
+        )
 
-    dirs = minima
-    vol_fracs = minima_vals
-    return odfs, dirs, vol_fracs
+        vol_fracs = vals / np.sum(vals)  # Normalize volume fractions
+        r, theta, phi = cart2sphere(xyz[:, 0], xyz[:, 1], xyz[:, 2])
+        dirs = np.array([theta, phi]).T
+        odfs = []
+        m_list, l_list = sph_harm_ind_list(6)
+        for theta, phi, vol_frac in zip(dirs[:, 0], dirs[:, 1], vol_fracs):
+            odfs.append(
+                convert_sh_descoteaux_tournier(
+                    gen_dirac(m_list, l_list, theta=theta, phi=phi)
+                )
+                * vol_frac
+            )
+        odfs = np.array(odfs)
+
+        return odfs, dirs, vol_fracs
+    else:
+        theta = np.linspace(0, np.pi, 1000)
+        phi = np.linspace(0, 2 * np.pi, 1000)
+        theta_grid, phi_grid = np.meshgrid(theta, phi)
+        points = np.array([sphere.theta, sphere.phi]).T
+        pdf_mesh_interp = CloughTocher2DInterpolator(points, mesh, fill_value=0)
+        rel_maxima = argrelmax(mesh, axis=0)
+
+        # Get top 10 as initial points
+        top_argmax = np.argsort(mesh[rel_maxima])[-10:]
+        top_verts = sphere.vertices[rel_maxima[0][top_argmax]]
+        top_theta, top_phi = (
+            sphere.theta[rel_maxima[0][top_argmax]],
+            sphere.phi[rel_maxima[0][top_argmax]],
+        )
+
+        # Minimize this
+        initial_guesses = np.array([top_theta, top_phi]).T
+        minima = []
+        for initial_guess in initial_guesses:
+            res = minimize(lambda x: -1 * pdf_mesh_interp(x), initial_guess)
+            minima.append(res.x)
+
+        # Get unique values and round to 4 decimals
+        minima = np.array(minima)
+
+        # Get values at minima
+        minima_vals = pdf_mesh_interp(minima)
+        minima_vals = minima_vals
+
+        # Get round to 4 decimals and remove repeats for both
+        minima = np.round(minima, 4)
+        minima = np.unique(minima, axis=0)
+        minima_vals = pdf_mesh_interp(minima)
+
+        # Keep only minima > 0.1
+        minima = minima[minima_vals > amp_threshold]
+        minima_vals = minima_vals[minima_vals > amp_threshold]
+
+        # Estimate volume fraction using ratio of amplitude at minima
+        minima_vals = minima_vals / np.sum(minima_vals)
+
+        # Now estimate ODF at these points with these volume fractions
+        m_list, l_list = sph_harm_ind_list(6)
+        odfs = []
+        for min, min_val in zip(minima, minima_vals):
+            odfs.append(
+                convert_sh_descoteaux_tournier(
+                    gen_dirac(m_list, l_list, theta=min[0], phi=min[1])
+                )
+                * min_val
+            )
+        odfs = np.array(odfs)
+
+        dirs = minima
+        vol_fracs = minima_vals
+        return odfs, dirs, vol_fracs
 
 
 def angular_separation(angle1, angle2):
@@ -610,3 +670,41 @@ def load_fissile_mat(path):
         )
 
     return data_dict
+
+def fiber_response(
+    sphere,
+    theta=0,
+    phi=0,
+    bval=2000,
+    lambda_mean=0.9e-3,
+    lambda_perp=0.54e-3,
+):
+    """Simulate a fiber response function.
+
+    Parameters
+    ----------
+    sphere : Dipy Sphere
+        Sphere to plot the ODF on.
+    theta : float, optional
+        Angle in radians, by default 0
+    phi : float, optional
+        Angle in radians, by default 0
+    bval : float, optional
+        B-value, by default 2000
+    lambda_mean : float, optional
+        Mean diffusivity, by default 0.9e-3
+    lambda_perp : float, optional
+        Perpendicular diffusivity, by default 0.54e-3
+
+    Returns
+    -------
+    response_amp : NumPy array
+        Simulated fiber response function calculated at vertices of sphere.
+    """
+    rot = R.from_euler("ZYZ", [phi, theta, 0])
+    g = rot.as_matrix() @ np.array([0, 0, 1])
+    cos_theta = np.dot(sphere.vertices, g)
+    response_amp = np.exp(-bval * lambda_perp) * np.exp(
+        -3 * bval * (lambda_mean - lambda_perp) * (cos_theta**2)
+    )
+    return response_amp

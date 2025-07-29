@@ -3,20 +3,22 @@ from datetime import datetime
 
 lr = 1e-3
 batch_size = 512
-n_steps = 10000
+n_steps = 20000
 validation_patience = 5
 loss = "MSE"
-model = "mesh_mlp"
-gpu_id = 1
+model = "mesh_scnn"
+gpu_id = 0
 seed = 42
-mesh_subdivide = 3
+mesh_subdivide = 1
 kappa = 100
 n_fibers = 'both'
+healpix = True
+min_separation_angle = 0
 save_dir = "./models"
 test_dir = "./test_data"
 
 datetime_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-name = f"deepfixel_{model}_{datetime_str}"
+name = f"deepfixel_{model}_healpix_{datetime_str}"
 
 deep_fixel.train_mesh_model(
     run_name=name,
@@ -32,6 +34,7 @@ deep_fixel.train_mesh_model(
     kappa=kappa,
     n_fibers=n_fibers,
     save_dir=save_dir,
+    healpix=healpix,
 )
 
 output_dir = f'./outputs/{name}'
@@ -39,6 +42,7 @@ amp_threshold = 0.1
 model_path = f"./models/{name}/best_model.pth"
 
 deep_fixel.test_mesh_model(
+    model=model,
     model_path=model_path,
     batch_size=batch_size,
     n_fibers=n_fibers,
@@ -48,4 +52,8 @@ deep_fixel.test_mesh_model(
     kappa=kappa,
     test_dir=test_dir,
     gpu_id=gpu_id,
+    healpix=healpix,
+    use_dipy=True,
+    min_separation_angle=min_separation_angle,
+    is_symmetric=True
 )
