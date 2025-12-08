@@ -1,5 +1,5 @@
 # DeepFixel: Crossing white matter fiber identification through spherical convolutional neural networks
-[![arXiv](https://img.shields.io/badge/arXiv-2511.03893-b31b1b.svg)](https://arxiv.org/abs/2511.03893)
+[![arXiv](https://img.shields.io/badge/arXiv-2511.03893-b31b1b.svg)](https://arxiv.org/abs/2511.03893) [![Zenodo](https://zenodo.org/badge/DOI/10.5281/zenodo.13121149.svg)](https://doi.org/10.5281/zenodo.13121149)
 
 DeepFixel is a deep learning method for identification of crossing fiber bundle elements from diffusion MRI.
 
@@ -14,7 +14,7 @@ uv sync
 Alternatively, you can use Docker or Apptainer (see instructions below).
 
 ## Usage
-To run the model, download the weights and testing dataset from the following link: [https://zenodo.org/records/17834290](https://zenodo.org/records/17834290). 
+To run the model, download the weights and testing dataset from the following link: [https://doi.org/10.5281/zenodo.13121149](https://doi.org/10.5281/zenodo.13121149). 
 - Unzip and copy the testing data to `./test_data`
 - Put the weights in `./models/pretrained`
 
@@ -43,7 +43,7 @@ sudo docker run --rm -it --gpus all -v $(pwd):$(pwd) $spherical_deep_fixel:v1.0.
 ```
 
 ## Usage (Apptainer)
-A pre-built Apptainer image is available on Zenodo: 
+A pre-built Apptainer image is available on Zenodo ([https://doi.org/10.5281/zenodo.13121149](https://doi.org/10.5281/zenodo.13121149)):
 
 ```bash
 apptainer run -C -B $(pwd):$(pwd) --nv https://zenodo.org/records/17834290/files/spherical_deep_fixel_v1.0.0.sif python /app/train_deep_fixel.py --config /path/to/config/example_scnn.yaml
