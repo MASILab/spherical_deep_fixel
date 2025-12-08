@@ -14,7 +14,7 @@ uv sync
 Alternatively, you can use Docker or Apptainer (see instructions below).
 
 ## Usage
-To run the model, download the weights and testing dataset from the following link: [https://zenodo.org/records/16587458](https://zenodo.org/records/16587458). 
+To run the model, download the weights and testing dataset from the following link: [https://zenodo.org/records/17834290](https://zenodo.org/records/17834290). 
 - Unzip and copy the testing data to `./test_data`
 - Put the weights in `./models/pretrained`
 
@@ -46,8 +46,8 @@ sudo docker run --rm -it --gpus all -v $(pwd):$(pwd) $spherical_deep_fixel:v1.0.
 A pre-built Apptainer image is available on Zenodo: 
 
 ```bash
-apptainer run -C -B $(pwd):$(pwd) --nv https://zenodo.org/records/16587458/files/spherical_deep_fixel_v1.0.0.sif python /app/train_deep_fixel.py --config /path/to/config/example_scnn.yaml
-apptainer run -C -B $(pwd):$(pwd) --nv https://zenodo.org/records/16587458/files/spherical_deep_fixel_v1.0.0.sif python /app/test_deep_fixel.py --config /path/to/config/example_scnn.yaml
+apptainer run -C -B $(pwd):$(pwd) --nv https://zenodo.org/records/17834290/files/spherical_deep_fixel_v1.0.0.sif python /app/train_deep_fixel.py --config /path/to/config/example_scnn.yaml
+apptainer run -C -B $(pwd):$(pwd) --nv https://zenodo.org/records/17834290/files/spherical_deep_fixel_v1.0.0.sif python /app/test_deep_fixel.py --config /path/to/config/example_scnn.yaml
 ```
 
 ## Applying the model to your own data
