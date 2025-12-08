@@ -126,7 +126,7 @@ class RandomFixelDataset(IterableDataset):
         if self.n_fibers == "both":
             n_fibers = self.rng.choice([2, 3])
         else:
-            n_fibers = self.n_fibers
+            n_fibers = int(self.n_fibers)
 
         # Generate random volume fraction using Dirichlet distribution
         vol = self.rng.dirichlet(np.ones(n_fibers))
@@ -317,7 +317,7 @@ class RandomMeshDataset(IterableDataset):
         if self.n_fibers == "both":
             n_fibers = self.rng.choice([2, 3])
         else:
-            n_fibers = self.n_fibers
+            n_fibers = int(self.n_fibers)
 
         # Generate random volume fraction using Dirichlet distribution
         vol = self.rng.dirichlet(np.ones(n_fibers))

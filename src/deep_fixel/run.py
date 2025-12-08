@@ -13,6 +13,7 @@ import pandas as pd
     
 def train_mesh_model(
     run_name,
+    project_name="deepfixel",
     lr=1e-3,
     batch_size=512,
     n_fibers=2,
@@ -56,7 +57,7 @@ def train_mesh_model(
 
     # Set up Weights and Biases
     wandb.login()
-    run = wandb.init(project="deepfixel", name=run_name, config=config)
+    run = wandb.init(project=project_name, name=run_name, config=config)
 
     # Set up datasets
     train_dataset = RandomMeshDataset(n_fibers=n_fibers, l_max=6, seed=seed, subdivide=mesh_subdivide, kappa=kappa, healpix=healpix, csd=csd, snr=snr)

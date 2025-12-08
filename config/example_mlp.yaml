@@ -1,0 +1,47 @@
+# Example config for MLP model training and testing
+
+# wandb project name
+project_name: "deepfixel"
+
+# Learning rate
+lr: 1e-3 
+
+# Batch size for training and testing
+batch_size: 512
+
+# Loss function, can be "MSE" or "L1"
+loss: "MSE"
+
+# Model type, can be "mesh_mlp" or "mesh_scnn"
+model: "mesh_mlp"
+
+# GPU for training
+gpu_id: 0
+
+# Random seed for reproducibility
+seed: 42
+
+# Keep this at 1 for correct sampling of sphere
+mesh_subdivide: 1
+
+# Keep this true for correct sampling of sphere
+healpix: true
+
+# Spread parameter for Bingham distribution of simulated data
+kappa: 100
+
+# Minimum separation angle between fibers in degrees for simulated data
+min_separation_angle: 0
+
+# Number of fibers per voxel, either 1, 2 or 'both'
+n_fibers: 'both'
+
+# Directories for testing data and testing outputs
+test_dir: "./test_data"
+output_dir: './outputs/pretrained_mlp'
+
+# Threshold for amplitude of FOD peaks (below this, peaks are ignored)
+amp_threshold: 0.1
+
+# Path to pretrained model
+pretrained_model_path: "./models/pretrained/best_model_mlp.pth"
