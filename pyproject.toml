@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deep_fixel"
-version = "1.0.0"
+version = "1.2.0"
 authors = [
     {name = "Adam Saunders", email = "adam.m.saunders@vanderbilt.edu"}
 ]
@@ -41,5 +41,8 @@ dependencies = [
     "wandb>=0.19.7",
 ]
 
+[project.scripts]
+deepfixel = "deep_fixel.scripts.inference:main"
+
 [project.urls]
-Homepage = "https://github.com/MASILab/deep_fixel"
+Homepage = "https://github.com/MASILab/spherical_deep_fixel"

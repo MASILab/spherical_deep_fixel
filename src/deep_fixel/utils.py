@@ -20,10 +20,13 @@ from scipy.optimize import minimize
 from scipy.signal import argrelmax
 from scipy.spatial.transform import Rotation as R
 from scipy.io import loadmat
-import cmcrameri 
+import cmcrameri
 from line_profiler import profile
 
-def plot_odf(odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.1, sphere=None):
+
+def plot_odf(
+    odf, ax=None, color="blue", basis="tournier", alpha=1, linewidth=0.1, sphere=None
+):
     """Plot a spherical orientation distribution function represented by spherical harmonic coefficients.
 
     Parameters
@@ -413,7 +416,10 @@ def match_odfs(true_odfs, est_odfs):
 
     return matched_est_odfs, index_array
 
-def pdf2odfs(mesh, sphere, amp_threshold=0.5, use_dipy=False, **kwargs):
+
+def pdf2odfs(
+    mesh, sphere, amp_threshold=0.5, use_dipy=False, lmax=6, max_num=None, **kwargs
+):
     """
     Estimate ODFs from spherical PDF
 
@@ -426,7 +432,11 @@ def pdf2odfs(mesh, sphere, amp_threshold=0.5, use_dipy=False, **kwargs):
     amp_threshold : float, optional
         Amplitude threshold for maxima, by default 0.5
     use_dipy : bool, optional
-        Whether to use Dipy's peak finding, by default True.
+        Whether to use Dipy's peak finding, by default False.
+    lmax : int, optional
+        Maximum spherical harmonic degree, by default 6
+    max_num : int, optional
+        Maximum number of peaks to find, by default None
     **kwargs : dict, optional
         Additional keyword arguments for peak finding if using Dipy.
 
@@ -439,6 +449,8 @@ def pdf2odfs(mesh, sphere, amp_threshold=0.5, use_dipy=False, **kwargs):
     vol_fracs : NumPy array
         Estimated volume fractions
     """
+    m_list, l_list = sph_harm_ind_list(lmax)
+
     if use_dipy == "nl":
         points = np.array([sphere.theta, sphere.phi]).T
         pdf_mesh_interp = CloughTocher2DInterpolator(points, mesh, fill_value=0)
@@ -449,13 +461,19 @@ def pdf2odfs(mesh, sphere, amp_threshold=0.5, use_dipy=False, **kwargs):
             pdf_mesh_interp_sphere,
             relative_peak_threshold=amp_threshold,
             sphere=sphere,
-            **kwargs
+            **kwargs,
         )
+        if max_num is not None:
+            # Keep only top max_num peaks
+            if vals.shape[0] > max_num:
+                top_indices = np.argsort(vals)[-max_num:]
+                xyz = xyz[top_indices]
+                vals = vals[top_indices]
+
         vol_fracs = vals / np.sum(vals)  # Normalize volume fractions
         r, theta, phi = cart2sphere(xyz[:, 0], xyz[:, 1], xyz[:, 2])
         dirs = np.array([theta, phi]).T
         odfs = []
-        m_list, l_list = sph_harm_ind_list(6)
         for theta, phi, vol_frac in zip(dirs[:, 0], dirs[:, 1], vol_fracs):
             odfs.append(
                 convert_sh_descoteaux_tournier(
@@ -473,11 +491,21 @@ def pdf2odfs(mesh, sphere, amp_threshold=0.5, use_dipy=False, **kwargs):
             **kwargs,
         )
 
+        if len(vals) == 0:
+            return np.zeros((1, len(m_list))), np.zeros((1, 2)), np.zeros((1,))
+
+        if max_num is not None:
+            # Keep only top max_num peaks
+            if vals.shape[0] > max_num:
+                top_indices = np.argsort(vals)[-max_num:]
+                xyz = xyz[top_indices]
+                vals = vals[top_indices]
+
         vol_fracs = vals / np.sum(vals)  # Normalize volume fractions
         r, theta, phi = cart2sphere(xyz[:, 0], xyz[:, 1], xyz[:, 2])
         dirs = np.array([theta, phi]).T
         odfs = []
-        m_list, l_list = sph_harm_ind_list(6)
+        m_list, l_list = sph_harm_ind_list(lmax)
         for theta, phi, vol_frac in zip(dirs[:, 0], dirs[:, 1], vol_fracs):
             odfs.append(
                 convert_sh_descoteaux_tournier(
@@ -527,11 +555,18 @@ def pdf2odfs(mesh, sphere, amp_threshold=0.5, use_dipy=False, **kwargs):
         minima = minima[minima_vals > amp_threshold]
         minima_vals = minima_vals[minima_vals > amp_threshold]
 
+        if max_num is not None:
+            # Keep only top max_num peaks
+            if minima_vals.shape[0] > max_num:
+                top_indices = np.argsort(minima_vals)[-max_num:]
+                minima = minima[top_indices]
+                minima_vals = minima_vals[top_indices]
+
         # Estimate volume fraction using ratio of amplitude at minima
         minima_vals = minima_vals / np.sum(minima_vals)
 
         # Now estimate ODF at these points with these volume fractions
-        m_list, l_list = sph_harm_ind_list(6)
+        m_list, l_list = sph_harm_ind_list(lmax)
         odfs = []
         for min, min_val in zip(minima, minima_vals):
             odfs.append(
@@ -569,6 +604,7 @@ def angular_separation(angle1, angle2):
     ) * np.cos(theta2)
     delta = np.arccos(cos_delta)
     return delta
+
 
 def load_fissile_mat(path):
     """Load output from FISSILE and match estimated fibers to true fibers.
@@ -670,6 +706,7 @@ def load_fissile_mat(path):
         )
 
     return data_dict
+
 
 def fiber_response(
     sphere,

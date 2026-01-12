@@ -52,4 +52,8 @@ PYPROJECT
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install /opt/hsd
 
+RUN mkdir -p /app/models
+ADD https://zenodo.org/records/17859792/files/best_model_mlp.pth?download=1 /app/models/best_model_mlp.pth
+ADD https://zenodo.org/records/17859792/files/best_model_scnn.pth?download=1 /app/models/best_model_scnn.pth
+
 ENV PATH="/app/.venv/bin:${PATH}"

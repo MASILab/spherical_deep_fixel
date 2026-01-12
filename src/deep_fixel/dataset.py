@@ -26,6 +26,7 @@ from tqdm import tqdm
 
 from .utils import load_fissile_mat, fiber_response
 
+
 class RandomODFDataset(IterableDataset):
     def __init__(self, n_fibers, l_max=6, seed=None, size=None, deterministic=False):
         """Generate ODFs at random angles and volume fractions (using Tournier07/mrtrix convention)
@@ -182,7 +183,8 @@ class RandomFixelDataset(IterableDataset):
         else:
             while True:
                 yield self.generate_odf()
-                
+
+
 class RandomMeshDataset(IterableDataset):
     def __init__(
         self,
@@ -382,7 +384,7 @@ class RandomMeshDataset(IterableDataset):
             sh_order_max=self.l_max,
             basis_type="tournier07",
         )
-        
+
         pdf = [
             v * vonmises_fisher(mu, self.kappa).pdf(self.icosphere.vertices)
             for v, mu in zip(vol, xyz.T)
@@ -614,37 +616,36 @@ class GeneratedMeshDataset(Dataset):
 class GeneratedMeshNIFTIDataset(Dataset):
     def __init__(
         self,
-        n_fibers,
         nifti_path,
+        mask=None,
+        lmax=6,
         subdivide=3,
-        kappa=100,
         healpix=False,
     ):
         """Load ODFs from a directory of .mat files from FISSILE outputs.
 
         Parameters
         ----------
-        n_fibers : int or str
-            Number of fibers in each ODF. If 'both', will use 2 and 3.
         nifti_path : str
-            Path to nifti file
+            Path to nifti file containing ODFs in spherical harmonic coefficients in tournier07/mrtrix convention
+        mask : str
+            Path to nifti file containing mask, by default None
+        lmax : int, optional
+            Maximum spherical harmonic order, by default 6
         subdivide : int, optional
             Number of times to subdivide the ico-hemisphere if healpix=False,
             otherwise corresponds to depth of Healpix sampling (where smaller is more vertices), by default 3
-        kappa : float, optional
-            Concentration parameter for von Mises-Fisher distribution, by default 100
         healpix : bool, optional
             If True, sample on healpix instead of icosphere, by default False
         """
-        self.n_fibers = n_fibers
         self.nifti_path = nifti_path
-        self.l_max = 6
+        self.l_max = lmax
 
         if healpix:
             n_side = 8
             depth = subdivide
             patch_size = 1
-            sh_degree = 6
+            sh_degree = lmax
             pooling_mode = "average"
             pooling_name = "mixed"
             use_hemisphere = True
@@ -666,13 +667,19 @@ class GeneratedMeshNIFTIDataset(Dataset):
             self.n_mesh = len(self.icosphere.vertices)
             self.sphere = self.icosphere
 
-        self.kappa = kappa
-
         # Load NIFTI
         nifti = nib.load(nifti_path)
+        self.shape = nifti.shape
+        self.affine = nifti.affine
 
         # Flatten all except last axis
         nifti_data = nifti.get_fdata().squeeze()
+
+        if mask is not None:
+            mask_nifti = nib.load(mask)
+            mask_data = mask_nifti.get_fdata().squeeze().astype(bool)
+            nifti_data = nifti_data[mask_data]
+
         nifti_data = nifti_data.reshape(-1, nifti_data.shape[-1])
 
         # Append each ODF in file to list
