@@ -56,7 +56,7 @@ sudo docker build -t spherical_deep_fixel:v1.2.0 .
 Then run the Docker container with the following command (note you will likely need to bind in local directories with `-v`):
 
 ```bash
-sudo docker run --rm -it --gpus all \
+sudo docker run --rm -it --gpus all spherical_deep_fixel:v1.2.0 \
     /path/to/input/fod.nii.gz \
     /path/to/output_dir \
     /app/models/best_model_scnn.pth \
@@ -72,8 +72,8 @@ sudo docker run --rm -it --gpus all \
 
 For training and testing:
 ```bash
-sudo docker run --rm -it --gpus all $spherical_deep_fixel:v1.2.0 python train_deep_fixel.py --config /path/to/config/example_scnn.yaml
-sudo docker run --rm -it --gpus all $spherical_deep_fixel:v1.2.0 python test_deep_fixel.py --config /path/to/config/example_scnn.yaml
+sudo docker run --rm -it --gpus all spherical_deep_fixel:v1.2.0 python train_deep_fixel.py --config /path/to/config/example_scnn.yaml
+sudo docker run --rm -it --gpus all spherical_deep_fixel:v1.2.0 python test_deep_fixel.py --config /path/to/config/example_scnn.yaml
 ```
 
 ### Apptainer
