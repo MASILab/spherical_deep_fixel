@@ -57,7 +57,7 @@ Then run the Docker container with the following command (note you will likely n
 
 ```bash
 sudo docker run --rm -it --gpus all spherical_deep_fixel:v1.2.0 \
-    /path/to/input/fod.nii.gz \
+    deepfixel /path/to/input/fod.nii.gz \
     /path/to/output_dir \
     /app/models/best_model_scnn.pth \
     --mask /path/to/mask.nii.gz \
@@ -81,7 +81,7 @@ A pre-built Apptainer image is available on Zenodo ([https://doi.org/10.5281/zen
 
 ```bash
 apptainer run -C --nv spherical_deep_fixel_v1.2.0.sif \
-    /path/to/input/fod.nii.gz \
+    deepfixel /path/to/input/fod.nii.gz \
     /path/to/output_dir \
     /app/models/best_model_scnn.pth \
     --mask /path/to/mask.nii.gz \
