@@ -352,7 +352,7 @@ def angular_corr_coeff(odf1, odf2):
     return angular_corr
 
 
-def match_odfs(true_odfs, est_odfs):
+def match_odfs(true_odfs, est_odfs, ignore_duplicates=False):
     """Match estimated ODFs to true ODFs.
 
     Parameters
@@ -361,6 +361,8 @@ def match_odfs(true_odfs, est_odfs):
         Array of true ODFs. Should be sorted by largest first for optimal.
     est_odfs : NumPy array (Nx28)
         Array of estimated ODFs.
+    ignore_duplicates : bool, optional
+        Whether to ignore duplicate matches, by default False
 
     Returns
     -------
@@ -409,7 +411,8 @@ def match_odfs(true_odfs, est_odfs):
         est_odfs_copy[closest_index] = np.inf
 
     # Index array should have different numbers
-    assert len(np.unique(index_array)) == len(index_array), "Matching failed."
+    if not ignore_duplicates:
+        assert len(np.unique(index_array)) == len(index_array), "Matching failed."
 
     # Use the index array to reorder the estimated arrays if needed
     matched_est_odfs = est_odfs[index_array]
